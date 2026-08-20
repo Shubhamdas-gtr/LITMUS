@@ -1,5 +1,6 @@
 "use client";
 
+import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import {
@@ -449,6 +450,9 @@ export default function AssessmentPage() {
   const [assessmentAnswers, setAssessmentAnswers] = useState<
     Record<string, number>
   >({});
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const customSkillInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -518,6 +522,58 @@ export default function AssessmentPage() {
     },
     [],
   );
+
+  async function submitAssessment() {
+  setLoading(true);
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      setMessage("Please sign in before submitting your assessment.");
+      return;
+    }
+
+    const response = await fetch(
+      "http://127.0.0.1:8000/api/profile/assessment",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          career_goal: selectedGoal?.title ?? "",
+          target_role: selectedRole?.title ?? "",
+          interests: selectedInterestLabels,
+          skills: selectedSkills.map((skill) => skill.label),
+          skill_confidence: Object.fromEntries(
+            selectedSkills.map((skill) => [
+              skill.label,
+              skillConfidence[skill.id] ?? "",
+            ]),
+          ),
+          assessment_answers: assessmentAnswers,
+        }),
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setMessage(data.detail ?? "Could not save your assessment.");
+      return;
+    }
+
+    setStep(8);
+  } catch {
+    setMessage("Could not reach the backend.");
+  } finally {
+    setLoading(false);
+  }
+}
   const selectedSkillLabels = selectedSkills.map((skill) => skill.label);
   const confidenceSummary = confidenceLevels.map((level) => {
     const count = selectedSkills.filter(
@@ -1764,7 +1820,7 @@ export default function AssessmentPage() {
                   }
 
                   if (isFinalAssessmentQuestion) {
-                    setStep(8);
+                    submitAssessment();
                     return;
                   }
 
