@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import {
   getAssessmentQuestionSet,
@@ -502,6 +503,36 @@ export default function AssessmentPage() {
   const answeredAssessmentCount = assessmentQuestions.filter(
     (question) => assessmentAnswers[question.id] !== undefined,
   ).length;
+  const selectedInterestLabels = selectedInterests.reduce<string[]>(
+    (labels, interestId) => {
+      const label =
+        interestId === exploringInterest.id
+          ? exploringInterest.title
+          : interestOptions.find((interest) => interest.id === interestId)?.title;
+
+      if (label) {
+        labels.push(label);
+      }
+
+      return labels;
+    },
+    [],
+  );
+  const selectedSkillLabels = selectedSkills.map((skill) => skill.label);
+  const confidenceSummary = confidenceLevels.map((level) => {
+    const count = selectedSkills.filter(
+      (skill) => skillConfidence[skill.id] === level.id,
+    ).length;
+
+    return {
+      ...level,
+      count,
+    };
+  });
+  const maxConfidenceCount = Math.max(
+    1,
+    ...confidenceSummary.map((item) => item.count),
+  );
 
   const toggleInterest = (id: InterestId) => {
     if (id === exploringInterest.id) {
@@ -1747,92 +1778,289 @@ export default function AssessmentPage() {
             </div>
           </section>
         ) : (
-          <section className="flex flex-1 items-center justify-center py-10 lg:py-14">
-            <div className="w-full max-w-2xl rounded-[2rem] border border-[var(--border-strong)] bg-[var(--surface)] p-6 shadow-[0_24px_60px_rgba(17,17,17,0.08)] sm:p-8">
+          <section className="flex flex-1 flex-col gap-8 py-10 lg:py-14">
+            <div className="space-y-5">
               <p className="font-ui text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
-                Assessment complete
-              </p>
-              <h1 className="font-ui mt-4 text-[clamp(2.4rem,5.5vw,4.4rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
-                Nice. We saved your responses.
-              </h1>
-              <p className="font-ui mt-4 max-w-xl text-base leading-7 text-[var(--muted)] sm:text-lg">
-                Your answers are stored locally for now. They&apos;re ready for the
-                next stage of LITMUS when we connect the full reveal.
+                Profile reveal
               </p>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-4">
-                <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--background)] px-4 py-3">
-                  <p className="font-ui text-xs uppercase tracking-[0.26em] text-[var(--muted)]">
-                    Role
+              <h1 className="font-ui max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+                Your LITMUS profile is ready.
+              </h1>
+
+              <p className="font-ui max-w-2xl text-base leading-7 text-[var(--muted)] sm:text-lg">
+                We have a starting picture of where you are. Now let&apos;s make
+                it more accurate.
+              </p>
+            </div>
+
+            <section className="rounded-[2rem] border border-[var(--border-strong)] bg-[var(--surface)] p-5 shadow-[0_18px_40px_rgba(17,17,17,0.08)] sm:p-6">
+              <div className="flex flex-col gap-3 border-b border-[var(--border)] pb-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+                    Profile header
                   </p>
-                  <p className="font-ui mt-2 text-base font-semibold tracking-[-0.03em] text-[var(--foreground)]">
+                  <h2 className="font-ui mt-2 text-2xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                    {selectedRole?.title ?? "Target role not set"}
+                  </h2>
+                </div>
+
+                <div className="inline-flex w-fit items-center rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  {selectedGoal?.title ?? "Career goal not set"}
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--background)] px-4 py-4">
+                  <p className="font-ui text-xs uppercase tracking-[0.26em] text-[var(--muted)]">
+                    Target role
+                  </p>
+                  <p className="font-ui mt-2 text-lg font-semibold tracking-[-0.04em] text-[var(--foreground)]">
                     {selectedRole?.title ?? "Not selected"}
                   </p>
                 </div>
 
-                <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--background)] px-4 py-3">
+                <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--background)] px-4 py-4">
                   <p className="font-ui text-xs uppercase tracking-[0.26em] text-[var(--muted)]">
-                    Questions
+                    Career goal
                   </p>
-                  <p className="font-ui mt-2 text-base font-semibold tracking-[-0.03em] text-[var(--foreground)]">
-                    {answeredAssessmentCount} / {assessmentQuestions.length} saved
-                  </p>
-                </div>
-
-                <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--background)] px-4 py-3">
-                  <p className="font-ui text-xs uppercase tracking-[0.26em] text-[var(--muted)]">
-                    Skills
-                  </p>
-                  <p className="font-ui mt-2 text-base font-semibold tracking-[-0.03em] text-[var(--foreground)]">
-                    {selectedSkills.length} selected
-                  </p>
-                </div>
-
-                <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--background)] px-4 py-3">
-                  <p className="font-ui text-xs uppercase tracking-[0.26em] text-[var(--muted)]">
-                    Next
-                  </p>
-                  <p className="font-ui mt-2 text-base font-semibold tracking-[-0.03em] text-[var(--foreground)]">
-                    Ready to reveal
+                  <p className="font-ui mt-2 text-lg font-semibold tracking-[-0.04em] text-[var(--foreground)]">
+                    {selectedGoal?.title ?? "Not selected"}
                   </p>
                 </div>
               </div>
+            </section>
 
-              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <section className="space-y-4">
+              <div className="space-y-2">
+                <p className="font-ui text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
+                  Section 1
+                </p>
+                <h2 className="font-ui text-3xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                  What we know
+                </h2>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+                        Interests
+                      </p>
+                      <h3 className="font-ui mt-2 text-2xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                        {selectedInterestLabels.length > 0
+                          ? `${selectedInterestLabels.length} selected`
+                          : "No interests selected"}
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {selectedInterestLabels.length > 0 ? (
+                      selectedInterestLabels.map((label) => (
+                        <span
+                          key={label}
+                          className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+                        >
+                          {label}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="font-ui text-sm leading-6 text-[var(--muted)]">
+                        We will use your interests to shape the rest of the
+                        product.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+                        Skills
+                      </p>
+                      <h3 className="font-ui mt-2 text-2xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                        {selectedSkillLabels.length > 0
+                          ? `${selectedSkillLabels.length} declared`
+                          : "No skills declared"}
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {selectedSkillLabels.length > 0 ? (
+                      selectedSkillLabels.map((label) => (
+                        <span
+                          key={label}
+                          className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-[var(--muted)]"
+                        >
+                          {label}
+                        </span>
+                      ))
+                    ) : (
+                      <p className="font-ui text-sm leading-6 text-[var(--muted)]">
+                        We will combine declared skills with evidence later.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+                        Confidence
+                      </p>
+                      <h3 className="font-ui mt-2 text-2xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                        Self-reported only
+                      </h3>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    {confidenceSummary.map((item) => (
+                      <div key={item.id} className="space-y-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-ui text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+                            {item.label}
+                          </span>
+                          <span className="font-ui text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+                            {item.count}
+                          </span>
+                        </div>
+
+                        <div className="h-2 overflow-hidden rounded-full border border-[var(--border)] bg-[var(--background)]">
+                          <div
+                            className="h-full rounded-full bg-[var(--accent)] transition-all duration-300"
+                            style={{
+                              width: `${(item.count / maxConfidenceCount) * 100}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+                        Assessment
+                      </p>
+                      <h3 className="font-ui mt-2 text-2xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                        {assessmentQuestions.length > 0 &&
+                        answeredAssessmentCount === assessmentQuestions.length
+                          ? "Completed"
+                          : "In progress"}
+                      </h3>
+                    </div>
+
+                    <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      No score yet
+                    </span>
+                  </div>
+
+                  <p className="font-ui mt-4 max-w-md text-sm leading-6 text-[var(--muted)]">
+                    {assessmentQuestions.length > 0
+                      ? `${answeredAssessmentCount} of ${assessmentQuestions.length} role questions are saved.`
+                      : "We will save your role assessment answers here once they are added."}
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <div className="space-y-2">
+                <p className="font-ui text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
+                  Section 2
+                </p>
+                <h2 className="font-ui text-3xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                  What we&apos;ll discover next
+                </h2>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    title: "Resume evidence",
+                    description:
+                      "We&apos;ll analyze what your resume actually demonstrates.",
+                  },
+                  {
+                    title: "GitHub evidence",
+                    description:
+                      "We&apos;ll look at your projects and contributions.",
+                  },
+                  {
+                    title: "Real job requirements",
+                    description:
+                      "We&apos;ll compare your profile against the roles you&apos;re targeting.",
+                  },
+                  {
+                    title: "Skill gaps",
+                    description:
+                      "We&apos;ll identify what you should strengthen next.",
+                  },
+                ].map((item) => (
+                  <article
+                    key={item.title}
+                    className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(17,17,17,0.08)]"
+                  >
+                    <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+                      Evidence
+                    </p>
+                    <h3 className="font-ui mt-3 text-2xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                      {item.title}
+                    </h3>
+                    <p className="font-ui mt-3 text-sm leading-6 text-[var(--muted)]">
+                      {item.description}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-[2rem] border border-[var(--border-strong)] bg-[var(--surface)] p-6 shadow-[0_18px_40px_rgba(17,17,17,0.08)]">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="space-y-2">
+                  <p className="font-ui text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
+                    Section 3
+                  </p>
+                  <h2 className="font-ui text-3xl font-semibold tracking-[-0.05em] text-[var(--foreground)]">
+                    Next step
+                  </h2>
+                  <p className="font-ui max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-base">
+                    This is the handoff from self-reported information to the
+                    deeper product experience.
+                  </p>
+                </div>
+
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+                >
+                  Build my LITMUS profile
+                </Link>
+              </div>
+
+              <div className="mt-5 flex flex-col gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
                 <button
                   type="button"
                   onClick={() => setStep(7)}
-                  className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-6 py-3.5 text-sm font-semibold text-[var(--foreground)] shadow-[0_10px_24px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[0_14px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+                  className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-[var(--background)] px-6 py-3.5 text-sm font-semibold text-[var(--foreground)] shadow-[0_10px_24px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[0_14px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
                 >
-                  Review questions
+                  Back to review
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep(1);
-                    setCareerGoal(null);
-                    setTargetRole(null);
-                    setSelectedInterests([]);
-                    setResumeChoice(null);
-                    setResumeFile(null);
-                    setResumeError(null);
-                    setRoleQuery("");
-                    setSelectedSkills([]);
-                    setSkillQuery("");
-                    setShowCustomSkillComposer(false);
-                    setCustomSkillValue("");
-                    setSkillError(null);
-                    setSkillConfidence({});
-                    setAssessmentQuestionIndex(0);
-                    setAssessmentAnswers({});
-                  }}
-                  className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
-                >
-                  Start over
-                </button>
+                <p className="font-ui text-sm leading-6 text-[var(--muted)]">
+                  Your assessment is complete. The next step is the product
+                  experience.
+                </p>
               </div>
-            </div>
+            </section>
           </section>
         )}
       </div>
