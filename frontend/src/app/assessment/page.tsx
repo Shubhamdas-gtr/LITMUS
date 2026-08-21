@@ -562,12 +562,38 @@ export default function AssessmentPage() {
 
     const data = await response.json();
 
-    if (!response.ok) {
-      setMessage(data.detail ?? "Could not save your assessment.");
-      return;
-    }
+if (!response.ok) {
+  setMessage(data.detail ?? "Could not save your assessment.");
+  return;
+}
 
-    setStep(8);
+if (resumeFile) {
+  const formData = new FormData();
+  formData.append("file", resumeFile);
+
+  const resumeResponse = await fetch(
+    "http://127.0.0.1:8000/api/profile/resume",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: formData,
+    },
+  );
+
+  const resumeData = await resumeResponse.json();
+
+  if (!resumeResponse.ok) {
+    setMessage(
+      resumeData.detail ??
+        "Assessment saved, but resume upload failed.",
+    );
+    return;
+  }
+}
+
+setStep(8);
   } catch {
     setMessage("Could not reach the backend.");
   } finally {
