@@ -242,6 +242,65 @@ def upload_resume(
         "resume_path": file_path,
     }
 
+@app.get("/api/profile/resume")
+def get_resume_url(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    access_token = credentials.credentials
+
+    try:
+        user_response = supabase.auth.get_user(access_token)
+        user = user_response.user
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+        )
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="User not authenticated",
+        )
+
+    profile_response = (
+        supabase
+        .table("profiles")
+        .select("id, resume_path")
+        .eq("auth_user_id", user.id)
+        .single()
+        .execute()
+    )
+
+    if not profile_response.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Profile not found",
+        )
+
+    resume_path = profile_response.data.get("resume_path")
+
+    if not resume_path:
+        raise HTTPException(
+            status_code=404,
+            detail="No resume uploaded",
+        )
+
+    try:
+        response = (
+            supabase.storage
+            .from_("resumes")
+            .create_signed_url(resume_path, 300)
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not create resume URL: {str(error)}",
+        )
+
+    return {
+        "signed_url": response["signedURL"],
+    }
 
 @app.get("/api/profile")
 def get_profile(
