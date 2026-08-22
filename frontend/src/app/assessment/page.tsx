@@ -536,6 +536,29 @@ export default function AssessmentPage() {
       return;
     }
 
+    if (resumeChoice === "upload" && resumeFile) {
+    const resumeFormData = new FormData();
+    resumeFormData.append("file", resumeFile);
+
+    const resumeResponse = await fetch(
+      "http://127.0.0.1:8000/api/profile/resume",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: resumeFormData,
+      },
+    );
+
+    const resumeData = await resumeResponse.json();
+
+    if (!resumeResponse.ok) {
+      setMessage(resumeData.detail ?? "Could not upload your resume.");
+      return;
+    }
+  }
+
     const response = await fetch(
       "http://127.0.0.1:8000/api/profile/assessment",
       {

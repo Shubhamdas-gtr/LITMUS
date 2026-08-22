@@ -14,6 +14,40 @@ const [skills, setSkills] = useState<
 const [loading, setLoading] = useState(true);
 const [error, setError] = useState("");
 const [resumePath, setResumePath] = useState<string | null>(null);
+const handleViewResume = async () => {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      setError("Please sign in to view your resume.");
+      return;
+    }
+
+    const response = await fetch(
+      "http://127.0.0.1:8000/api/profile/resume",
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      },
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setError(data.detail ?? "Could not open your resume.");
+      return;
+    }
+
+    window.open(data.signed_url, "_blank", "noopener,noreferrer");
+  } catch (err) {
+    console.error(err);
+    setError("Could not reach the backend.");
+  }
+};
 
 useEffect(() => {
   async function loadDashboard() {
@@ -175,6 +209,36 @@ useEffect(() => {
             </div>
           </div>
         </div>
+        
+        <div className="mt-8 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5">
+  <p className="font-ui text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
+    Resume
+  </p>
+
+        <div className="mt-3">
+          {resumePath ? (
+          
+            <>
+              <p className="text-sm font-medium text-[var(--foreground)]">
+                Resume uploaded
+              </p>
+
+              <button
+                type="button"
+                onClick={handleViewResume}
+                className="mt-3 inline-flex items-center rounded-full border border-[var(--border-strong)] bg-[var(--foreground)] px-4 py-2 text-xs uppercase tracking-[0.2em] text-[var(--background)] transition duration-200 hover:-translate-y-0.5"
+              >
+                View Resume
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-[var(--muted)]">
+              No resume uploaded.
+            </p>
+          )}
+        </div>
+      </div>
+
       </>
     )}
   </div>
