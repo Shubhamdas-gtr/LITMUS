@@ -9,6 +9,8 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pathlib import Path
 from fastapi import UploadFile, File
+from services.ai_service import analyze_resume
+from services.resume_parser import extract_resume_text
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
@@ -41,6 +43,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def download_resume(resume_path: str) -> bytes:
+    try:
+        response = (
+            supabase.storage
+            .from_("resumes")
+            .download(resume_path)
+        )
+
+        return response
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Could not download resume: {str(error)}",
+        )
 
 
 @app.get("/")
@@ -302,6 +320,99 @@ def get_resume_url(
         "signed_url": response["signedURL"],
     }
 
+
+@app.post("/api/profile/resume/analyze")
+async def analyze_user_resume(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    access_token = credentials.credentials
+
+    try:
+        user_response = supabase.auth.get_user(access_token)
+        user = user_response.user
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+        )
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="User not authenticated",
+        )
+
+    profile_response = (
+        supabase
+        .table("profiles")
+        .select("id, resume_path, career_goal, target_role")
+        .eq("auth_user_id", user.id)
+        .single()
+        .execute()
+    )
+
+    if not profile_response.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Profile not found",
+        )
+
+    profile = profile_response.data
+    resume_path = profile.get("resume_path")
+
+    if not resume_path:
+        raise HTTPException(
+            status_code=404,
+            detail="No resume uploaded",
+        )
+
+    resume_bytes = download_resume(resume_path)
+
+    filename = resume_path.split("/")[-1]
+
+    try:
+        resume_text = extract_resume_text(
+            resume_bytes,
+            filename,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        )
+
+    analysis = await analyze_resume(resume_text)
+
+    analysis_data = {
+        "profile_id": profile["id"],
+        "summary": analysis.get("summary", ""),
+        "skills": analysis.get("skills", []),
+        "experience": analysis.get("experience", []),
+        "projects": analysis.get("projects", []),
+        "education": analysis.get("education", []),
+        "certifications": analysis.get("certifications", []),
+    }
+
+    save_response = (
+        supabase
+        .table("resume_analyses")
+        .upsert(
+            analysis_data,
+            on_conflict="profile_id",
+        )
+        .execute()
+    )
+
+    if not save_response.data:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save resume analysis.",
+        )
+
+    return {
+    "message": "Resume analyzed and saved successfully",
+    "analysis": analysis,
+}
 @app.get("/api/profile")
 def get_profile(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -372,3 +483,4 @@ def get_profile(
     "skills": skills_response.data,
     "assessment_answers": answers_response.data,
     }
+
