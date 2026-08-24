@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pathlib import Path
 from fastapi import UploadFile, File
-from services.ai_service import analyze_resume
+from services.ai_service import ask_ai, analyze_resume, analyze_skill_gap
 from services.resume_parser import extract_resume_text
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -413,6 +413,120 @@ async def analyze_user_resume(
     "message": "Resume analyzed and saved successfully",
     "analysis": analysis,
 }
+
+@app.post("/api/profile/skill-gap/analyze")
+async def analyze_skill_gap_endpoint(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    access_token = credentials.credentials
+
+    try:
+        user_response = supabase.auth.get_user(access_token)
+        user = user_response.user
+    except Exception:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+        )
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="User not authenticated",
+        )
+
+    # Get profile
+    profile_response = (
+        supabase
+        .table("profiles")
+        .select("id, target_role")
+        .eq("auth_user_id", user.id)
+        .single()
+        .execute()
+    )
+
+    if not profile_response.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Profile not found",
+        )
+
+    profile = profile_response.data
+    profile_id = profile["id"]
+    target_role = profile.get("target_role")
+
+    if not target_role:
+        raise HTTPException(
+            status_code=400,
+            detail="Target role has not been set",
+        )
+
+    # Get resume analysis
+    resume_response = (
+        supabase
+        .table("resume_analyses")
+        .select("*")
+        .eq("profile_id", profile_id)
+        .single()
+        .execute()
+    )
+
+    if not resume_response.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Resume analysis not found",
+        )
+
+    resume_analysis = resume_response.data
+
+    # Get assessment skills
+    skills_response = (
+        supabase
+        .table("profile_skills")
+        .select("skill, confidence")
+        .eq("profile_id", profile_id)
+        .execute()
+    )
+
+    assessment_skills = skills_response.data or []
+
+    # Run Skill Gap Agent
+    analysis = await analyze_skill_gap(
+        target_role=target_role,
+        resume_analysis=resume_analysis,
+        assessment_skills=assessment_skills,
+    )
+
+    # Save analysis
+    analysis_data = {
+        "profile_id": profile_id,
+        "target_role": target_role,
+        "required_skills": analysis.get("required_skills", []),
+        "strengths": analysis.get("strengths", []),
+        "weak_skills": analysis.get("weak_skills", []),
+        "missing_skills": analysis.get("missing_skills", []),
+    }
+
+    save_response = (
+        supabase
+        .table("skill_gap_analyses")
+        .upsert(
+            analysis_data,
+            on_conflict="profile_id",
+        )
+        .execute()
+    )
+
+    if not save_response.data:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save skill gap analysis",
+        )
+
+    return {
+        "message": "Skill gap analysis completed successfully",
+        "analysis": analysis,
+    }
 @app.get("/api/profile")
 def get_profile(
     credentials: HTTPAuthorizationCredentials = Depends(security),
