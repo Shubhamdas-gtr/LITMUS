@@ -183,6 +183,38 @@ def _search_count(
     return 0
 
 
+def _commit_matches_authenticated_user(
+    commit: dict,
+    username: str,
+    display_name: str | None,
+    email: str | None,
+) -> bool:
+    author = commit.get("author") or {}
+    committer = commit.get("committer") or {}
+    commit_meta = commit.get("commit") or {}
+    commit_author = commit_meta.get("author") or {}
+    commit_committer = commit_meta.get("committer") or {}
+
+    if author.get("login") == username or committer.get("login") == username:
+        return True
+
+    normalized_display_name = (display_name or "").strip().lower()
+    if normalized_display_name:
+        author_name = str(commit_author.get("name") or "").strip().lower()
+        committer_name = str(commit_committer.get("name") or "").strip().lower()
+        if author_name == normalized_display_name or committer_name == normalized_display_name:
+            return True
+
+    normalized_email = (email or "").strip().lower()
+    if normalized_email:
+        author_email = str(commit_author.get("email") or "").strip().lower()
+        committer_email = str(commit_committer.get("email") or "").strip().lower()
+        if author_email == normalized_email or committer_email == normalized_email:
+            return True
+
+    return False
+
+
 def collect_github_evidence(provider_token: str) -> dict:
     """Fetch and normalize a user's public GitHub evidence in a single pass.
 
@@ -300,6 +332,8 @@ def collect_github_evidence(provider_token: str) -> dict:
 
         commits_30d = 0
         commits_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        display_name = user.get("name")
+        email = user.get("email")
         for repo in public_repos:
             pushed_at = repo.get("pushed_at")
             if not pushed_at:
@@ -312,14 +346,23 @@ def collect_github_evidence(provider_token: str) -> dict:
                 continue
             if pushed_dt < commits_cutoff:
                 continue
-            commit_result = _get_json(
+            commit_result = _paginate(
                 client,
                 f"{GITHUB_API_URL}/repos/{username}/{repo.get('name')}/commits",
                 headers,
-                params={"author": username, "since": since, "per_page": 100},
+                params={"since": since, "per_page": 100},
             )
             if isinstance(commit_result, list):
-                commits_30d += len(commit_result)
+                commits_30d += sum(
+                    1
+                    for commit in commit_result
+                    if _commit_matches_authenticated_user(
+                        commit,
+                        username,
+                        display_name,
+                        email,
+                    )
+                )
 
         activity = {
             "commits_30d": commits_30d,

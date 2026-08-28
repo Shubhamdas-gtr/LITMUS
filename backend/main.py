@@ -2005,11 +2005,15 @@ async def sync_github_evidence(
 
     # Upsert the rolling 30-day activity bucket.
     try:
+        activity_period_start = (
+            datetime.now(timezone.utc) - timedelta(days=30)
+        ).date().isoformat()
+        activity_period_end = datetime.now(timezone.utc).date().isoformat()
         supabase.table("github_activity").upsert(
             {
                 "github_profile_id": github_profile_id,
-                "period_start": (datetime.now(timezone.utc) - timedelta(days=30)).date(),
-                "period_end": datetime.now(timezone.utc).date(),
+                "period_start": activity_period_start,
+                "period_end": activity_period_end,
                 "commits_count": activity.get("commits_30d", 0),
                 "prs_count": activity.get("prs_30d", 0),
                 "issues_count": activity.get("issues_30d", 0),
