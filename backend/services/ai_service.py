@@ -94,7 +94,15 @@ Analyze this resume:
     )
 
     try:
-        return json.loads(result)
+        cleaned = result.strip()
+
+        if cleaned.startswith("```"):
+            cleaned = cleaned.removeprefix("```json")
+            cleaned = cleaned.removeprefix("```")
+            cleaned = cleaned.removesuffix("```")
+            cleaned = cleaned.strip()
+
+        return json.loads(cleaned)
     except json.JSONDecodeError as exc:
         raise RuntimeError(
             "Resume Agent returned invalid JSON."
@@ -145,6 +153,18 @@ async def analyze_skill_gap(
     13. Use concise canonical skill names only.
     14. Do not include framework examples, alternatives, or parenthetical qualifiers in skill names.
     15. For example, use "Testing" rather than "Testing (Jest/Mocha)".
+    16. missing_skills must be a subset of required_skills.
+    17. Do not classify a skill as missing unless it appears in required_skills.
+    18. Do not include optional ecosystem technologies merely because they are absent
+        from the resume or assessment.
+    19. Do not treat frameworks, libraries, preprocessors, build tools, or alternative
+        technologies as missing unless they are explicitly required for the target role.
+    20. The absence of a technology from the resume is not sufficient evidence that
+        it is a meaningful skill gap.
+    21. Prioritize foundational and role-critical skills over niche technologies.
+    22. Keep missing_skills focused on genuine gaps that would materially improve
+        the candidate's readiness for the target role.
+    23. Normally return no more than 3-5 missing skills.
 
     For strengths, include skills that are clearly demonstrated.
 
@@ -196,8 +216,123 @@ async def analyze_skill_gap(
         )
 
         try:
-            return json.loads(result)
+            cleaned = result.strip()
+
+            if cleaned.startswith("```"):
+                cleaned = cleaned.removeprefix("```json")
+                cleaned = cleaned.removeprefix("```")
+                cleaned = cleaned.removesuffix("```")
+                cleaned = cleaned.strip()
+
+            return json.loads(cleaned)
         except json.JSONDecodeError as exc:
             raise RuntimeError(
                 "Skill Gap Agent returned invalid JSON."
-            ) from exc    
+            ) from exc
+
+async def generate_career_roadmap(
+    target_role: str,
+    skill_gap_analysis: dict,
+    current_skills: list[dict],
+) -> dict:
+    system_prompt = """
+You are the Learning and Career Roadmap Agent for LITMUS,
+an AI-powered career intelligence platform.
+
+Your job is to turn a candidate's skill-gap analysis into
+a practical, prioritized learning roadmap.
+
+Return ONLY valid JSON.
+
+Use exactly this structure:
+
+{
+  "role": "",
+  "roadmap": []
+}
+
+Each roadmap item must contain:
+
+{
+  "skill": "",
+  "priority": "high|medium|low",
+  "reason": "",
+  "learning_topics": [],
+  "project": "",
+  "evidence_of_mastery": ""
+}
+
+Rules:
+
+1. Prioritize genuine skill gaps identified by the Skill Gap Agent.
+2. High-priority gaps should generally come before medium and low-priority gaps.
+3. Do not create learning plans for skills the candidate already demonstrates strongly.
+4. Weak skills may receive a learning plan when improving them would meaningfully help the candidate reach the target role.
+5. Keep the roadmap practical and achievable.
+6. Break each skill into concrete learning topics.
+7. Every roadmap item should include a practical project that allows the candidate to apply the skill.
+8. Evidence of mastery should describe something observable the candidate could produce or demonstrate.
+9. Do not recommend technologies that are unrelated to the target role.
+10. Do not invent candidate experience.
+11. Use concise canonical skill names.
+12. Do not include courses, websites, YouTube videos, or specific external resources.
+13. Do not create roadmap items for skills that are not present in the provided skill-gap analysis.
+14. Avoid duplicate roadmap items.
+15. Keep the roadmap focused on the most important skills rather than listing every possible technology.
+16. Do not introduce additional technologies or frameworks as required
+  learning topics unless they are necessary fundamentals of the target skill.
+17. Keep learning topics focused on the canonical skill being addressed.
+
+"""
+
+    user_prompt = f"""
+Target role:
+{target_role}
+
+Skill gap analysis:
+{json.dumps(skill_gap_analysis, indent=2)}
+
+Current skills:
+{json.dumps(current_skills, indent=2)}
+"""
+
+    result = await ask_ai(
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+    )
+
+    try:
+        cleaned_result = result.strip()
+
+        if cleaned_result.startswith("```"):
+            cleaned_result = cleaned_result.removeprefix("```json")
+            cleaned_result = cleaned_result.removeprefix("```")
+            cleaned_result = cleaned_result.removesuffix("```")
+            cleaned_result = cleaned_result.strip()
+
+        roadmap_result = json.loads(cleaned_result)
+
+        allowed_skills = {
+            item["skill"].strip().lower()
+            for item in skill_gap_analysis.get("missing_skills", [])
+        }
+
+        allowed_skills.update(
+            item["skill"].strip().lower()
+            for item in skill_gap_analysis.get("weak_skills", [])
+        )
+
+        roadmap_result["roadmap"] = [
+            item
+            for item in roadmap_result.get("roadmap", [])
+            if item.get("skill", "").strip().lower() in allowed_skills
+        ]
+
+        return roadmap_result
+
+    except json.JSONDecodeError as exc:
+        print("RAW ROADMAP RESPONSE:")
+        print(result)
+        raise RuntimeError(
+            "Career Roadmap Agent returned invalid JSON."
+        ) from exc

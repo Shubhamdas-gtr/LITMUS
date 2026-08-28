@@ -1,13 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4efe5;
-  --foreground: #111111;
-  --surface: #fbf7f0;
-  --muted: #6d6458;
-  --accent: #ff5a28;
-  --border: rgba(17, 17, 17, 0.12);
-  --border-strong: rgba(17, 17, 17, 0.2);
+  --background: #05060a;
+  --foreground: #f4f1ea;
+  --surface: #0d1018;
+  --surface-strong: #121827;
+  --surface-soft: #0a0d14;
+  --surface-elevated: #151c2e;
+  --muted: #98a0b6;
+  --muted-strong: #c7cde0;
+  --accent: #bbff44;
+  --accent-strong: #8ddc10;
+  --accent-subtle: rgba(187, 255, 68, 0.12);
+  --violet: #8d63ff;
+  --violet-subtle: rgba(141, 99, 255, 0.14);
+  --success: #8ddc10;
+  --success-subtle: rgba(141, 220, 16, 0.12);
+  --warning: #f1b84d;
+  --warning-subtle: rgba(241, 184, 77, 0.12);
+  --danger: #ff6b6b;
+  --danger-subtle: rgba(255, 107, 107, 0.12);
+  --border: rgba(200, 205, 230, 0.18);
+  --border-strong: rgba(187, 255, 68, 0.38);
+  --ink: #05070b;
+  --ink-strong: #090c11;
 }
 
 @theme inline {
@@ -25,6 +41,7 @@
 html {
   min-height: 100%;
   background: var(--background);
+  color-scheme: dark;
   scroll-behavior: smooth;
 }
 
@@ -33,11 +50,11 @@ body {
   isolation: isolate;
   min-height: 100vh;
   margin: 0;
-  background-color: var(--background);
-  background-image:
-    linear-gradient(rgba(17, 17, 17, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(17, 17, 17, 0.028) 1px, transparent 1px);
-  background-size: 42px 42px;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(141, 99, 255, 0.26), transparent 55%),
+    radial-gradient(900px 500px at 18% 12%, rgba(141, 99, 255, 0.16), transparent 48%),
+    radial-gradient(800px 500px at 82% 18%, rgba(187, 255, 68, 0.1), transparent 44%),
+    linear-gradient(180deg, #06070c 0%, #070912 42%, #05060a 100%);
   color: var(--foreground);
   font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -50,14 +67,30 @@ body::before {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(circle at top left, rgba(255, 90, 40, 0.08), transparent 28%),
-    radial-gradient(circle at 80% 0%, rgba(17, 17, 17, 0.04), transparent 22%);
-  opacity: 0.9;
+    radial-gradient(ellipse 65% 45% at 50% 0%, rgba(141, 99, 255, 0.22), transparent 55%),
+    radial-gradient(circle at 50% 12%, rgba(187, 255, 68, 0.08), transparent 20%),
+    radial-gradient(circle at 8% 18%, rgba(141, 99, 255, 0.12), transparent 18%),
+    radial-gradient(circle at 92% 18%, rgba(141, 99, 255, 0.12), transparent 16%);
+  filter: blur(4px);
+  opacity: 0.95;
+}
+
+body::after {
+  content: "";
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 12%),
+    radial-gradient(circle at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.45) 100%);
+  mix-blend-mode: normal;
+  opacity: 0.7;
 }
 
 ::selection {
   background: var(--accent);
-  color: white;
+  color: var(--ink);
 }
 
 a,
@@ -70,6 +103,11 @@ a {
   text-decoration: none;
 }
 
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .font-ui {
   font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -80,5 +118,301 @@ a {
 }
 
 .font-hero {
-  font-family: var(--font-hero), ui-serif, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
+}
+
+.font-compact {
+  font-family: var(--font-compact), var(--font-body), ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
+  letter-spacing: -0.05em;
+}
+
+.litmus-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.litmus-shell::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: -8rem -6rem auto;
+  height: 32rem;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(141, 99, 255, 0.28), transparent 55%),
+    radial-gradient(circle at 40% 40%, rgba(187, 255, 68, 0.08), transparent 26%);
+  filter: blur(32px);
+  opacity: 1;
+  z-index: -1;
+  animation: auraFloat 18s ease-in-out infinite;
+}
+
+.litmus-brand-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border-strong);
+  background:
+    radial-gradient(circle at 28% 28%, rgba(187, 255, 68, 0.24), transparent 26%),
+    linear-gradient(180deg, rgba(18, 24, 39, 0.96), rgba(8, 10, 16, 0.98));
+  color: var(--accent);
+  box-shadow:
+    0 0 0 1px rgba(187, 255, 68, 0.08),
+    0 14px 32px rgba(0, 0, 0, 0.36),
+    0 0 24px rgba(141, 99, 255, 0.28);
+}
+
+.litmus-brand-mark::before {
+  content: "";
+  position: absolute;
+  inset: 0.5rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(187, 255, 68, 0.2);
+  opacity: 0.5;
+}
+
+.litmus-brand-mark span {
+  position: relative;
+  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.08em;
+}
+
+.litmus-brand-wordmark {
+  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.litmus-brand-tagline {
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+}
+
+.litmus-panel {
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 18%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01)),
+    var(--surface);
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.32),
+    0 0 0 1px rgba(141, 99, 255, 0.04) inset;
+}
+
+.litmus-panel-strong {
+  border: 1px solid var(--border-strong);
+  background:
+    linear-gradient(180deg, rgba(141, 99, 255, 0.08), transparent 16%),
+    var(--surface-strong);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.44),
+    0 0 0 1px rgba(187, 255, 68, 0.05) inset;
+}
+
+.litmus-surface {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 14%),
+    var(--surface);
+}
+
+.litmus-chip {
+  border: 1px solid var(--border);
+  background: rgba(8, 10, 16, 0.84);
+}
+
+.litmus-divider {
+  border-color: rgba(200, 205, 230, 0.12);
+}
+
+.litmus-lime {
+  color: var(--accent);
+}
+
+.litmus-violet {
+  color: #b5a0ff;
+}
+
+.litmus-core {
+  position: relative;
+  width: min(22rem, 72vw);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  border: 1px solid rgba(187, 255, 68, 0.18);
+  background:
+    radial-gradient(circle at 50% 50%, rgba(187, 255, 68, 0.2), transparent 24%),
+    radial-gradient(circle at 50% 50%, rgba(141, 99, 255, 0.24), transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1), transparent 70%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 24px rgba(141, 99, 255, 0.28),
+    0 0 60px rgba(187, 255, 68, 0.16);
+}
+
+.litmus-core::before,
+.litmus-core::after {
+  content: "";
+  position: absolute;
+  inset: -15%;
+  border-radius: inherit;
+  border: 1px solid rgba(141, 99, 255, 0.22);
+  animation: orbit 8s linear infinite;
+}
+
+.litmus-core::after {
+  inset: -28%;
+  border-color: rgba(187, 255, 68, 0.2);
+  animation-duration: 12s;
+  animation-direction: reverse;
+}
+
+.litmus-scan-line {
+  position: relative;
+  overflow: hidden;
+}
+
+.litmus-scan-line::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateY(-100%);
+  background: linear-gradient(180deg, transparent, rgba(187, 255, 68, 0.18), transparent);
+  animation: scan 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+
+
+.litmus-signal-danger {
+  border-left: 3px solid var(--danger);
+}
+
+.litmus-signal-warning {
+  border-left: 3px solid var(--warning);
+}
+
+.litmus-signal-success {
+  border-left: 3px solid var(--success);
+}
+
+.litmus-timeline {
+  position: relative;
+  padding-left: 2.25rem;
+}
+
+.litmus-timeline::before {
+  content: "";
+  position: absolute;
+  left: 0.65rem;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(187, 255, 68, 0.3),
+    rgba(141, 99, 255, 0.2) 60%,
+    rgba(187, 255, 68, 0.08)
+  );
+}
+
+.litmus-separator {
+  border: none;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(200, 205, 230, 0.12) 15%,
+    rgba(187, 255, 68, 0.12) 50%,
+    rgba(200, 205, 230, 0.12) 85%,
+    transparent
+  );
+}
+
+.litmus-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.litmus-dot-danger {
+  background: var(--danger);
+  box-shadow: 0 0 6px rgba(255, 107, 107, 0.5);
+}
+
+.litmus-dot-warning {
+  background: var(--warning);
+  box-shadow: 0 0 6px rgba(241, 184, 77, 0.5);
+}
+
+.litmus-dot-success {
+  background: var(--success);
+  box-shadow: 0 0 6px rgba(141, 220, 16, 0.5);
+}
+
+.litmus-grid-lines {
+  background-image:
+    linear-gradient(rgba(200, 205, 230, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 205, 230, 0.04) 1px, transparent 1px);
+  background-size: 3rem 3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@keyframes auraFloat {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(0, 0.5rem, 0) scale(1.03);
+  }
+}
+
+@keyframes orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes scan {
+  0% {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.9;
+  }
+  60% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: translateY(120%);
+    opacity: 0;
+  }
 }

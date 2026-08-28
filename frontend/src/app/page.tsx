@@ -29,24 +29,25 @@ const journey = [
 
 export default function Home() {
   return (
-    <main className="relative isolate overflow-hidden">
+    <main className="litmus-shell relative isolate overflow-hidden litmus-grid-lines">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between gap-4 py-3 sm:py-5">
           <div className="inline-flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--foreground)] text-sm font-semibold tracking-[0.24em] text-[var(--background)] shadow-[0_10px_24px_rgba(17,17,17,0.12)]">
-              L
+            <div className="litmus-brand-mark">
+              <span>L</span>
             </div>
+
             <div className="flex flex-col">
-              <span className="text-sm font-semibold tracking-[0.28em] text-[var(--foreground)]">
+              <span className="litmus-brand-wordmark text-sm font-semibold text-[var(--foreground)]">
                 LITMUS
               </span>
-              <span className="text-[0.7rem] uppercase tracking-[0.28em] text-[var(--muted)]">
-                career readiness
+              <span className="litmus-brand-tagline text-[0.66rem] text-[var(--muted)]">
+                unsure about your value, give yourself a LITMUS test
               </span>
             </div>
           </div>
 
-          <div className="hidden rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted)] shadow-[0_10px_24px_rgba(17,17,17,0.05)] sm:inline-flex">
+          <div className="hidden rounded-full border border-[var(--border)] bg-[rgba(8,10,16,0.74)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted)] shadow-[0_12px_26px_rgba(0,0,0,0.3)] sm:inline-flex">
             Guided assessment
           </div>
         </header>
@@ -55,10 +56,10 @@ export default function Home() {
           <div className="space-y-8">
             <div className="space-y-5">
               <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
-                For college students building career momentum
+                Career intelligence for college students
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(3.4rem,10vw,6.8rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.92]">
+              <h1 className="font-display max-w-3xl text-[clamp(3.4rem,10vw,6.8rem)] font-bold leading-[0.92] tracking-[-0.07em] text-[var(--foreground)]">
                 Your career, figured out.
               </h1>
 
@@ -72,18 +73,18 @@ export default function Home() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 href="/assessment"
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-[var(--ink)] shadow-[0_16px_36px_rgba(141,220,16,0.24)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
               >
                 Start your assessment
               </Link>
 
-              <div className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm text-[var(--muted)] shadow-[0_10px_24px_rgba(17,17,17,0.05)]">
+              <div className="inline-flex items-center rounded-full border border-[var(--border)] bg-[rgba(8,10,16,0.74)] px-4 py-3 text-sm text-[var(--muted)] shadow-[0_12px_28px_rgba(0,0,0,0.28)]">
                 8 step guided flow, built for clarity
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)]">
+              <div className="litmus-panel rounded-lg p-4 transition duration-200 hover:-translate-y-1 hover:border-[var(--border-strong)]">
                 <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
                   Understand
                 </p>
@@ -93,7 +94,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)]">
+              <div className="litmus-panel rounded-lg p-4 transition duration-200 hover:-translate-y-1 hover:border-[var(--border-strong)]">
                 <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
                   Build
                 </p>
@@ -102,7 +103,7 @@ export default function Home() {
                 </p>
               </div>
 
-              <div className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)]">
+              <div className="litmus-panel rounded-lg p-4 transition duration-200 hover:-translate-y-1 hover:border-[var(--border-strong)]">
                 <p className="text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
                   Get opportunities
                 </p>
@@ -115,7 +116,7 @@ export default function Home() {
 
           <div
             id="journey"
-            className="rounded-[2rem] border border-[var(--border-strong)] bg-[var(--surface)] p-4 shadow-[0_24px_60px_rgba(17,17,17,0.08)] sm:p-5"
+            className="litmus-panel-strong rounded-xl p-4 sm:p-5"
           >
             <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
               <div>
@@ -127,7 +128,7 @@ export default function Home() {
                 </h2>
               </div>
 
-              <div className="hidden rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)] md:inline-flex">
+              <div className="hidden rounded-full border border-[var(--border)] bg-[rgba(8,10,16,0.74)] px-3 py-1.5 text-xs font-medium uppercase tracking-[0.2em] text-[var(--muted)] md:inline-flex">
                 MVP flow
               </div>
             </div>
@@ -137,7 +138,7 @@ export default function Home() {
                 <article
                   key={item.title}
                   className={[
-                    "group rounded-[1.5rem] border border-[var(--border)] bg-[var(--background)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.04)] transition duration-200 ease-out hover:-translate-y-1 hover:border-[var(--border-strong)] hover:shadow-[0_18px_36px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99]",
+                    "group rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.74)] p-5 shadow-[0_12px_28px_rgba(0,0,0,0.24)] transition duration-200 ease-out hover:-translate-y-1 hover:border-[var(--border-strong)] hover:shadow-[0_18px_36px_rgba(0,0,0,0.32)] active:translate-y-0 active:scale-[0.99]",
                     index === 0 ? "sm:col-span-2" : "",
                   ].join(" ")}
                 >
@@ -151,7 +152,7 @@ export default function Home() {
                       </h3>
                     </div>
 
-                    <span className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-sm font-semibold text-[var(--accent)] transition duration-200 group-hover:bg-[var(--accent)] group-hover:text-white">
+                    <span className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[rgba(141,99,255,0.1)] text-sm font-semibold text-[var(--accent)] transition duration-200 group-hover:bg-[var(--accent)] group-hover:text-[var(--ink)]">
                       {item.step}
                     </span>
                   </div>
@@ -163,7 +164,7 @@ export default function Home() {
               ))}
             </div>
 
-            <div className="mt-4 rounded-[1.5rem] border border-dashed border-[var(--border)] bg-[var(--background)] px-5 py-4 text-sm leading-6 text-[var(--muted)]">
+            <div className="mt-4 rounded-lg border border-dashed border-[var(--border)] bg-[rgba(8,10,16,0.74)] px-5 py-4 text-sm leading-6 text-[var(--muted)]">
               Start with your current reality. LITMUS will use that to reveal
               what matters next.
             </div>

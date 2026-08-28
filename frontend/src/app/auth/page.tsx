@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { API_URL } from "@/lib/api";
 
 export default function AuthPage() {
   const [email, setEmail] = useState("");
@@ -59,7 +60,7 @@ async function testProfileApi() {
   }
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/api/profile/assessment", {
+    const response = await fetch(`${API_URL}/api/profile/assessment`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${session.access_token}`,
@@ -102,8 +103,8 @@ async function testProfileApi() {
 }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-8 shadow-[0_24px_60px_rgba(17,17,17,0.08)]">
+    <main className="litmus-shell flex min-h-screen items-center justify-center px-4 litmus-grid-lines">
+      <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-[0_24px_60px_rgba(0,0,0,0.44)]">
         <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
           LITMUS
         </p>

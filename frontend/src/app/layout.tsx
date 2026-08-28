@@ -1,19 +1,12 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import type { ReactNode } from "react";
 import "./globals.css";
 
 const displayFont = localFont({
   src: "./fonts/TbjGobankDemoBold-woKX6.ttf",
   variable: "--font-display",
   weight: "700",
-  style: "normal",
-  display: "swap",
-});
-
-const heroFont = localFont({
-  src: "./fonts/TbjGobankDemoRegular-vnML9.ttf",
-  variable: "--font-hero",
-  weight: "400",
   style: "normal",
   display: "swap",
 });
@@ -40,22 +33,42 @@ const bodyFont = localFont({
       weight: "700",
       style: "normal",
     },
+    {
+      path: "./fonts/GcGatuzodemoExtraBold-PVD5m.ttf",
+      weight: "800",
+      style: "normal",
+    },
   ],
   variable: "--font-body",
   display: "swap",
 });
 
+const compactFont = localFont({
+  src: "./fonts/GulamsCondensedDemoExtrabold-8OBrD.otf",
+  variable: "--font-compact",
+  weight: "800",
+  style: "normal",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "LITMUS | Career readiness for college students",
+  title: {
+    default: "LITMUS | Career intelligence for college students",
+    template: "%s | LITMUS",
+  },
   description:
-    "Understand your skills, identify gaps, build evidence, and move toward relevant opportunities with guided career readiness.",
+    "LITMUS helps college students understand their skills, evidence, and next best career moves.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+type RootLayoutProps = {
+  children: ReactNode;
+};
+
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html
       lang="en"
-      className={`${displayFont.variable} ${heroFont.variable} ${bodyFont.variable} h-full antialiased`}
+      className={`${displayFont.variable} ${bodyFont.variable} ${compactFont.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)]">
         {children}

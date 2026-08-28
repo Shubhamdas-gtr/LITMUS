@@ -46,6 +46,338 @@ export type Database = {
           },
         ]
       }
+      github_activity: {
+        Row: {
+          active_days: number
+          commits_count: number
+          created_at: string
+          github_profile_id: string
+          id: string
+          issues_count: number
+          period_end: string
+          period_start: string
+          prs_count: number
+        }
+        Insert: {
+          active_days?: number
+          commits_count?: number
+          created_at?: string
+          github_profile_id: string
+          id?: string
+          issues_count?: number
+          period_end: string
+          period_start: string
+          prs_count?: number
+        }
+        Update: {
+          active_days?: number
+          commits_count?: number
+          created_at?: string
+          github_profile_id?: string
+          id?: string
+          issues_count?: number
+          period_end?: string
+          period_start?: string
+          prs_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "github_activity_github_profile_id_fkey"
+            columns: ["github_profile_id"]
+            isOneToOne: false
+            referencedRelation: "github_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      github_profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          github_user_id: number
+          id: string
+          last_synced_at: string | null
+          profile_bio: string | null
+          profile_id: string
+          updated_at: string
+          username: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          github_user_id: number
+          id?: string
+          last_synced_at?: string | null
+          profile_bio?: string | null
+          profile_id: string
+          updated_at?: string
+          username: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          github_user_id?: number
+          id?: string
+          last_synced_at?: string | null
+          profile_bio?: string | null
+          profile_id?: string
+          updated_at?: string
+          username?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "github_profiles_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      github_repositories: {
+        Row: {
+          created_at: string
+          description: string | null
+          forks: number
+          github_profile_id: string
+          github_repo_id: number
+          id: string
+          is_fork: boolean
+          is_private: boolean
+          languages: Json
+          name: string
+          repo_created_at: string | null
+          repo_updated_at: string | null
+          stars: number
+          topics: string[]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          forks?: number
+          github_profile_id: string
+          github_repo_id: number
+          id?: string
+          is_fork?: boolean
+          is_private?: boolean
+          languages?: Json
+          name: string
+          repo_created_at?: string | null
+          repo_updated_at?: string | null
+          stars?: number
+          topics?: string[]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          forks?: number
+          github_profile_id?: string
+          github_repo_id?: number
+          id?: string
+          is_fork?: boolean
+          is_private?: boolean
+          languages?: Json
+          name?: string
+          repo_created_at?: string | null
+          repo_updated_at?: string | null
+          stars?: number
+          topics?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "github_repositories_github_profile_id_fkey"
+            columns: ["github_profile_id"]
+            isOneToOne: false
+            referencedRelation: "github_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_drafts: {
+        Row: {
+          body: string
+          channel: string
+          citations: Json
+          created_at: string
+          id: string
+          lead_id: string
+          model: string | null
+          prompt_version: string
+          status: string
+          subject: string | null
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          channel: string
+          citations?: Json
+          created_at?: string
+          id?: string
+          lead_id: string
+          model?: string | null
+          prompt_version: string
+          status?: string
+          subject?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          channel?: string
+          citations?: Json
+          created_at?: string
+          id?: string
+          lead_id?: string
+          model?: string | null
+          prompt_version?: string
+          status?: string
+          subject?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_drafts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_generation_receipts: {
+        Row: {
+          created_at: string
+          dedup_key: string
+          detected_event_id: string
+          github_profile_id: string
+          id: string
+          lead_id: string | null
+          profile_id: string
+        }
+        Insert: {
+          created_at?: string
+          dedup_key: string
+          detected_event_id: string
+          github_profile_id: string
+          id?: string
+          lead_id?: string | null
+          profile_id: string
+        }
+        Update: {
+          created_at?: string
+          dedup_key?: string
+          detected_event_id?: string
+          github_profile_id?: string
+          id?: string
+          lead_id?: string | null
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_generation_receipts_detected_event_id_fkey"
+            columns: ["detected_event_id"]
+            isOneToOne: false
+            referencedRelation: "github_detected_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_generation_receipts_github_profile_id_fkey"
+            columns: ["github_profile_id"]
+            isOneToOne: false
+            referencedRelation: "github_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_generation_receipts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_generation_receipts_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads: {
+        Row: {
+          angle: string
+          confidence: number | null
+          created_at: string
+          dedup_key: string
+          detected_event_id: string | null
+          expires_at: string | null
+          generated_at: string
+          github_profile_id: string
+          id: string
+          profile_id: string
+          relevant_skills: string[]
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          angle: string
+          confidence?: number | null
+          created_at?: string
+          dedup_key: string
+          detected_event_id?: string | null
+          expires_at?: string | null
+          generated_at?: string
+          github_profile_id: string
+          id?: string
+          profile_id: string
+          relevant_skills?: string[]
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          angle?: string
+          confidence?: number | null
+          created_at?: string
+          dedup_key?: string
+          detected_event_id?: string | null
+          expires_at?: string | null
+          generated_at?: string
+          github_profile_id?: string
+          id?: string
+          profile_id?: string
+          relevant_skills?: string[]
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_detected_event_id_fkey"
+            columns: ["detected_event_id"]
+            isOneToOne: false
+            referencedRelation: "github_detected_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_github_profile_id_fkey"
+            columns: ["github_profile_id"]
+            isOneToOne: false
+            referencedRelation: "github_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profile_interests: {
         Row: {
           created_at: string
@@ -162,6 +494,41 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "resumes_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_progress: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          created_at: string
+          id: string
+          profile_id: string
+          skill: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          profile_id: string
+          skill: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          profile_id?: string
+          skill?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_progress_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"

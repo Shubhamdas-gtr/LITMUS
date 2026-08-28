@@ -1,12 +1,14 @@
 "use client";
 
+;
 import { supabase } from "@/lib/supabase";
-import Link from "next/link";
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   getAssessmentQuestionSet,
   type AssessmentQuestion,
 } from "./questionSets";
+import { API_URL } from "@/lib/api";
 
 const careerGoals = [
   {
@@ -368,7 +370,7 @@ function QuestionCard({
   onSelect,
 }: QuestionCardProps) {
   return (
-    <section className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+    <section className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
       <div className="flex flex-col gap-4 border-b border-[var(--border)] pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -384,7 +386,7 @@ function QuestionCard({
         </span>
       </div>
 
-      <h3 className="font-ui mt-5 max-w-3xl text-[clamp(1.6rem,3vw,2.2rem)] font-semibold tracking-[-0.05em] text-[var(--foreground)] leading-[1.02]">
+      <h3 className="font-display mt-5 max-w-3xl text-[clamp(1.6rem,3vw,2.2rem)] font-semibold tracking-[-0.05em] text-[var(--foreground)] leading-[1.02]">
         {question.question}
       </h3>
 
@@ -399,9 +401,9 @@ function QuestionCard({
               onClick={() => onSelect(optionIndex)}
               aria-pressed={isSelected}
               className={[
-                "group min-h-[92px] rounded-[1.25rem] border p-4 text-left shadow-[0_10px_24px_rgba(17,17,17,0.04)] transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
+                "group min-h-[92px] rounded-md border p-4 text-left shadow-[0_10px_24px_rgba(17,17,17,0.04)] transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-[0_16px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
                 isSelected
-                  ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_14px_30px_rgba(17,17,17,0.08)]"
+                  ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_0_0_1px_rgba(187,255,68,0.15)_inset,0_8px_24px_rgba(187,255,68,0.1)]"
                   : "border-[var(--border)] bg-[var(--background)]",
               ].join(" ")}
             >
@@ -455,6 +457,7 @@ export default function AssessmentPage() {
   
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const customSkillInputRef = useRef<HTMLInputElement | null>(null);
+  const router = useRouter();
 
   const selectedGoal = careerGoals.find((goal) => goal.id === careerGoal);
   const selectedRole =
@@ -524,105 +527,112 @@ export default function AssessmentPage() {
   );
 
   async function submitAssessment() {
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    if (!session) {
-      setMessage("Please sign in before submitting your assessment.");
-      return;
-    }
+      if (!session) {
+        setMessage("Please sign in before submitting your assessment.");
+        return;
+      }
 
-    if (resumeChoice === "upload" && resumeFile) {
-    const resumeFormData = new FormData();
-    resumeFormData.append("file", resumeFile);
-
-    const resumeResponse = await fetch(
-      "http://127.0.0.1:8000/api/profile/resume",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
+      // 1. Save the assessment
+      const assessmentResponse = await fetch(
+        `${API_URL}/api/profile/assessment`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            career_goal: selectedGoal?.title ?? "",
+            target_role: selectedRole?.title ?? "",
+            interests: selectedInterestLabels,
+            skills: selectedSkills.map((skill) => skill.label),
+            skill_confidence: Object.fromEntries(
+              selectedSkills.map((skill) => [
+                skill.label,
+                skillConfidence[skill.id] ?? "",
+              ]),
+            ),
+            assessment_answers: assessmentAnswers,
+          }),
         },
-        body: resumeFormData,
-      },
-    );
+      );
 
-    const resumeData = await resumeResponse.json();
+      const assessmentData = await assessmentResponse.json();
 
-    if (!resumeResponse.ok) {
-      setMessage(resumeData.detail ?? "Could not upload your resume.");
-      return;
+      if (!assessmentResponse.ok) {
+        setMessage(
+          assessmentData.detail ?? "Could not save your assessment.",
+        );
+        return;
+      }
+
+      // 2. Upload resume if one was selected
+      if (resumeChoice === "upload" && resumeFile) {
+        setMessage("Assessment saved. Uploading your resume...");
+
+        const resumeFormData = new FormData();
+        resumeFormData.append("file", resumeFile);
+
+        const resumeResponse = await fetch(
+          `${API_URL}/api/profile/resume`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: resumeFormData,
+          },
+        );
+
+        const resumeData = await resumeResponse.json();
+
+        if (!resumeResponse.ok) {
+          setMessage(
+            resumeData.detail ?? "Could not upload your resume.",
+          );
+          return;
+        }
+      }
+
+      // 3. Generate analysis: resume → skill gap → career roadmap
+      setMessage("Assessment saved. Building your career roadmap...");
+
+      const analysisResponse = await fetch(
+        `${API_URL}/api/profile/generate-all`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      const analysisData = await analysisResponse.json();
+
+      if (!analysisResponse.ok) {
+        setMessage(
+          analysisData.detail ??
+            "Assessment saved, but we could not generate your career roadmap.",
+        );
+        return;
+      }
+
+      // 4. Show the final reveal first
+      setMessage("Your LITMUS profile is ready.");
+      setStep(8);
+    } catch {
+      setMessage("Could not reach the backend.");
+    } finally {
+      setLoading(false);
     }
   }
-
-    const response = await fetch(
-      "http://127.0.0.1:8000/api/profile/assessment",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          career_goal: selectedGoal?.title ?? "",
-          target_role: selectedRole?.title ?? "",
-          interests: selectedInterestLabels,
-          skills: selectedSkills.map((skill) => skill.label),
-          skill_confidence: Object.fromEntries(
-            selectedSkills.map((skill) => [
-              skill.label,
-              skillConfidence[skill.id] ?? "",
-            ]),
-          ),
-          assessment_answers: assessmentAnswers,
-        }),
-      },
-    );
-
-    const data = await response.json();
-
-if (!response.ok) {
-  setMessage(data.detail ?? "Could not save your assessment.");
-  return;
-}
-
-if (resumeFile) {
-  const formData = new FormData();
-  formData.append("file", resumeFile);
-
-  const resumeResponse = await fetch(
-    "http://127.0.0.1:8000/api/profile/resume",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: formData,
-    },
-  );
-
-  const resumeData = await resumeResponse.json();
-
-  if (!resumeResponse.ok) {
-    setMessage(
-      resumeData.detail ??
-        "Assessment saved, but resume upload failed.",
-    );
-    return;
-  }
-}
-
-setStep(8);
-  } catch {
-    setMessage("Could not reach the backend.");
-  } finally {
-    setLoading(false);
-  }
-}
   const selectedSkillLabels = selectedSkills.map((skill) => skill.label);
   const confidenceSummary = confidenceLevels.map((level) => {
     const count = selectedSkills.filter(
@@ -746,18 +756,19 @@ setStep(8);
   };
 
   return (
-    <main className="relative isolate overflow-hidden">
+    <main className="litmus-shell relative isolate overflow-hidden litmus-grid-lines">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-4 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between gap-4 py-3 sm:py-5">
           <div className="inline-flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border-strong)] bg-[var(--foreground)] text-sm font-semibold tracking-[0.24em] text-[var(--background)] shadow-[0_10px_24px_rgba(17,17,17,0.12)]">
-              L
+            <div className="litmus-brand-mark">
+              <span>L</span>
             </div>
+
             <div className="flex flex-col">
-              <span className="font-ui text-sm font-semibold tracking-[0.28em] text-[var(--foreground)]">
+              <span className="litmus-brand-wordmark text-sm font-semibold text-[var(--foreground)]">
                 LITMUS
               </span>
-              <span className="font-ui text-[0.7rem] uppercase tracking-[0.28em] text-[var(--muted)]">
+              <span className="litmus-brand-tagline text-[0.7rem] text-[var(--muted)]">
                 assessment
               </span>
             </div>
@@ -768,6 +779,12 @@ setStep(8);
           </div>
         </header>
 
+        {(loading || message) ? (
+          <div className="mb-6 rounded-md border border-[var(--border)] bg-[rgba(8,10,16,0.76)] px-4 py-3 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_26px_rgba(0,0,0,0.22)]">
+            {loading ? "Saving your assessment..." : message}
+          </div>
+        ) : null}
+
         {step === 1 ? (
           <section className="flex flex-1 flex-col justify-center gap-8 py-10 lg:py-14">
             <div className="space-y-5">
@@ -775,7 +792,7 @@ setStep(8);
                 Career assessment
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(2.8rem,7vw,5.6rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+              <h1 className="font-display max-w-3xl text-[clamp(2.8rem,7vw,5.6rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
                 What are you preparing for?
               </h1>
 
@@ -796,9 +813,9 @@ setStep(8);
                     onClick={() => setCareerGoal(goal.id)}
                     aria-pressed={isSelected}
                     className={[
-                      "group flex min-h-[210px] flex-col justify-between rounded-[1.75rem] border bg-[var(--surface)] p-5 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
+                      "group flex min-h-[210px] flex-col justify-between rounded-lg border bg-[var(--surface)] p-5 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
                       isSelected
-                        ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_16px_36px_rgba(17,17,17,0.08)]"
+                        ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_0_0_1px_rgba(187,255,68,0.15)_inset,0_8px_24px_rgba(187,255,68,0.1)]"
                         : "border-[var(--border)]",
                     ].join(" ")}
                   >
@@ -845,7 +862,7 @@ setStep(8);
                   }
                 }}
                 disabled={!canContinueFromStepOne}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
               >
                 Continue
               </button>
@@ -858,7 +875,7 @@ setStep(8);
                 Target role
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+              <h1 className="font-display max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
                 Where do you want to go?
               </h1>
 
@@ -869,7 +886,7 @@ setStep(8);
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+            <div className="flex flex-col gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <label
                   htmlFor="role-search"
@@ -911,9 +928,9 @@ setStep(8);
                     onClick={() => setTargetRole(role.id)}
                     aria-pressed={isSelected}
                     className={[
-                      "group flex min-h-[160px] flex-col justify-between rounded-[1.5rem] border bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
+                      "group flex min-h-[160px] flex-col justify-between rounded-md border bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
                       isSelected
-                        ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_16px_36px_rgba(17,17,17,0.08)]"
+                        ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_0_0_1px_rgba(187,255,68,0.15)_inset,0_8px_24px_rgba(187,255,68,0.1)]"
                         : "border-[var(--border)]",
                     ].join(" ")}
                   >
@@ -943,7 +960,7 @@ setStep(8);
             </div>
 
             {filteredRoles.length === 0 ? (
-              <div className="rounded-[1.5rem] border border-dashed border-[var(--border)] bg-[var(--background)] px-5 py-4 text-sm leading-6 text-[var(--muted)]">
+              <div className="rounded-md border border-dashed border-[var(--border)] bg-[var(--background)] px-5 py-4 text-sm leading-6 text-[var(--muted)]">
                 No roles match that search yet. Try a broader keyword.
               </div>
             ) : null}
@@ -953,9 +970,9 @@ setStep(8);
               onClick={() => setTargetRole(unsureRole.id)}
               aria-pressed={targetRole === unsureRole.id}
               className={[
-                "group flex w-full flex-col gap-4 rounded-[1.5rem] border bg-[var(--surface)] p-5 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
+                "group flex w-full flex-col gap-4 rounded-md border bg-[var(--surface)] p-5 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
                 targetRole === unsureRole.id
-                  ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_16px_36px_rgba(17,17,17,0.08)]"
+                  ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_0_0_1px_rgba(187,255,68,0.15)_inset,0_8px_24px_rgba(187,255,68,0.1)]"
                   : "border-[var(--border)]",
               ].join(" ")}
             >
@@ -1003,7 +1020,7 @@ setStep(8);
                   }
                 }}
                 disabled={!canContinueFromStepTwo}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
               >
                 Continue
               </button>
@@ -1016,7 +1033,7 @@ setStep(8);
                 Area of interest
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+              <h1 className="font-display max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
                 What makes you curious?
               </h1>
 
@@ -1051,9 +1068,9 @@ setStep(8);
                     onClick={() => toggleInterest(interest.id)}
                     aria-pressed={isSelected}
                     className={[
-                      "group flex min-h-[160px] flex-col justify-between rounded-[1.5rem] border bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
+                      "group flex min-h-[160px] flex-col justify-between rounded-md border bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
                       isSelected
-                        ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_16px_36px_rgba(17,17,17,0.08)]"
+                        ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_0_0_1px_rgba(187,255,68,0.15)_inset,0_8px_24px_rgba(187,255,68,0.1)]"
                         : "border-[var(--border)]",
                     ].join(" ")}
                   >
@@ -1086,9 +1103,9 @@ setStep(8);
                 onClick={() => toggleInterest(exploringInterest.id)}
                 aria-pressed={selectedInterests.includes(exploringInterest.id)}
                 className={[
-                  "group flex min-h-[160px] flex-col justify-between rounded-[1.5rem] border bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] sm:col-span-2 xl:col-span-1",
+                  "group flex min-h-[160px] flex-col justify-between rounded-md border bg-[var(--surface)] p-4 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] sm:col-span-2 xl:col-span-1",
                   selectedInterests.includes(exploringInterest.id)
-                    ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_16px_36px_rgba(17,17,17,0.08)]"
+                    ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_0_0_1px_rgba(187,255,68,0.15)_inset,0_8px_24px_rgba(187,255,68,0.1)]"
                     : "border-[var(--border)]",
                 ].join(" ")}
               >
@@ -1153,7 +1170,7 @@ setStep(8);
                   }
                 }}
                 disabled={!canContinueFromStepThree}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
               >
                 Continue
               </button>
@@ -1166,7 +1183,7 @@ setStep(8);
                 Resume
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+              <h1 className="font-display max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
                 Show us what you&apos;ve built so far.
               </h1>
 
@@ -1193,9 +1210,9 @@ setStep(8);
             <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
               <div
                 className={[
-                  "rounded-[1.75rem] border bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200",
+                  "rounded-lg border bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200",
                   resumeChoice === "upload"
-                    ? "border-[var(--accent)] bg-[#fff7f2]"
+                    ? "border-[var(--accent)] bg-[var(--accent-subtle)]"
                     : "border-[var(--border)]",
                 ].join(" ")}
               >
@@ -1216,7 +1233,7 @@ setStep(8);
 
                 <div
                   className={[
-                    "mt-5 rounded-[1.5rem] border border-dashed bg-[var(--background)] p-4 shadow-[0_10px_24px_rgba(17,17,17,0.04)] transition duration-200",
+                    "mt-5 rounded-md border border-dashed bg-[var(--background)] p-4 shadow-[0_10px_24px_rgba(17,17,17,0.04)] transition duration-200",
                     resumeChoice === "upload"
                       ? "border-[var(--accent)]"
                       : "border-[var(--border)]",
@@ -1244,7 +1261,7 @@ setStep(8);
                   {!resumeFile ? (
                     <label
                       htmlFor="resume-upload"
-                      className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-[1.25rem] px-5 py-8 text-center transition duration-200 hover:bg-[rgba(255,255,255,0.45)]"
+                      className="flex min-h-[220px] cursor-pointer flex-col items-center justify-center rounded-md px-5 py-8 text-center transition duration-200 hover:bg-[rgba(255,255,255,0.45)]"
                     >
                       <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-lg font-semibold text-[var(--accent)]">
                         +
@@ -1260,8 +1277,8 @@ setStep(8);
                       </p>
                     </label>
                   ) : (
-                    <div className="flex min-h-[220px] flex-col items-center justify-center rounded-[1.25rem] px-5 py-8 text-center">
-                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-[var(--accent)] bg-[var(--accent)] text-sm font-semibold text-white shadow-[0_10px_22px_rgba(255,90,40,0.24)]">
+                    <div className="flex min-h-[220px] flex-col items-center justify-center rounded-md px-5 py-8 text-center">
+                      <div className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-[var(--accent)] bg-[var(--accent)] text-sm font-semibold text-white shadow-[0_10px_22px_rgba(141,220,16,0.14)]">
                         Uploaded
                       </div>
                       <p className="font-ui mt-4 text-xl font-semibold tracking-[-0.04em] text-[var(--foreground)]">
@@ -1287,7 +1304,7 @@ setStep(8);
                         <button
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
-                          className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[0_10px_22px_rgba(255,90,40,0.24)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#e85224]"
+                          className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[0_10px_22px_rgba(141,220,16,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent-strong)]"
                         >
                           Replace
                         </button>
@@ -1297,7 +1314,7 @@ setStep(8);
                 </div>
 
                 {resumeError ? (
-                  <p className="font-ui mt-4 rounded-[1rem] border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
+                  <p className="font-ui mt-4 rounded-lg border border-[var(--border)] bg-[var(--background)] px-4 py-3 text-sm leading-6 text-[var(--muted)]">
                     {resumeError}
                   </p>
                 ) : null}
@@ -1312,9 +1329,9 @@ setStep(8);
                 }}
                 aria-pressed={resumeChoice === "no_resume"}
                 className={[
-                  "group flex min-h-[220px] flex-col justify-between rounded-[1.75rem] border bg-[var(--surface)] p-5 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
+                  "group flex min-h-[220px] flex-col justify-between rounded-lg border bg-[var(--surface)] p-5 text-left shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_18px_34px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
                   resumeChoice === "no_resume"
-                    ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_16px_36px_rgba(17,17,17,0.08)]"
+                    ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_0_0_1px_rgba(187,255,68,0.15)_inset,0_8px_24px_rgba(187,255,68,0.1)]"
                     : "border-[var(--border)]",
                 ].join(" ")}
               >
@@ -1364,7 +1381,7 @@ setStep(8);
                   }
                 }}
                 disabled={!canContinueFromStepFour}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
               >
                 Continue
               </button>
@@ -1377,7 +1394,7 @@ setStep(8);
                 Skills
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+              <h1 className="font-display max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
                 What can you actually do?
               </h1>
 
@@ -1402,7 +1419,7 @@ setStep(8);
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -1451,7 +1468,7 @@ setStep(8);
                 </p>
               </div>
 
-              <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+              <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -1468,7 +1485,7 @@ setStep(8);
                       setShowCustomSkillComposer((current) => !current);
                       setSkillError(null);
                     }}
-                    className="inline-flex items-center rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[0_10px_22px_rgba(255,90,40,0.24)] transition duration-200 hover:-translate-y-0.5 hover:bg-[#e85224]"
+                    className="inline-flex items-center rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-white shadow-[0_10px_22px_rgba(141,220,16,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent-strong)]"
                   >
                     + Add another skill
                   </button>
@@ -1484,7 +1501,7 @@ setStep(8);
                   />
 
                   {showCustomSkillComposer ? (
-                    <div className="rounded-[1.4rem] border border-[var(--border)] bg-[var(--background)] p-4 shadow-[0_10px_24px_rgba(17,17,17,0.04)]">
+                    <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-4 shadow-[0_10px_24px_rgba(17,17,17,0.04)]">
                       <label
                         htmlFor="custom-skill"
                         className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]"
@@ -1541,7 +1558,7 @@ setStep(8);
                 filteredSkillCategories.map((category) => (
                   <section
                     key={category.title}
-                    className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]"
+                    className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]"
                   >
                     <div className="flex items-center justify-between gap-4 border-b border-[var(--border)] pb-4">
                       <div>
@@ -1577,9 +1594,9 @@ setStep(8);
                             }}
                             aria-pressed={isSelected}
                             className={[
-                              "group flex min-h-[112px] flex-col justify-between rounded-[1.25rem] border bg-[var(--background)] p-4 text-left shadow-[0_10px_24px_rgba(17,17,17,0.04)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_16px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
+                              "group flex min-h-[112px] flex-col justify-between rounded-md border bg-[var(--background)] p-4 text-left shadow-[0_10px_24px_rgba(17,17,17,0.04)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_16px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
                               isSelected
-                                ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_14px_30px_rgba(17,17,17,0.08)]"
+                                ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_14px_30px_rgba(17,17,17,0.08)]"
                                 : "border-[var(--border)]",
                             ].join(" ")}
                           >
@@ -1610,7 +1627,7 @@ setStep(8);
                   </section>
                 ))
               ) : (
-                <div className="rounded-[1.75rem] border border-dashed border-[var(--border)] bg-[var(--surface)] px-5 py-6 text-sm leading-6 text-[var(--muted)]">
+                <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] px-5 py-6 text-sm leading-6 text-[var(--muted)]">
                   No skills match that search yet. Try a broader keyword.
                 </div>
               )}
@@ -1633,7 +1650,7 @@ setStep(8);
                   }
                 }}
                 disabled={!canContinueFromStepFive}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
               >
                 Continue
               </button>
@@ -1646,7 +1663,7 @@ setStep(8);
                 Skill confidence
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+              <h1 className="font-display max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
                 How confident are you?
               </h1>
 
@@ -1683,7 +1700,7 @@ setStep(8);
                   return (
                     <section
                       key={skill.id}
-                      className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]"
+                      className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]"
                     >
                       <div className="flex flex-col gap-4 border-b border-[var(--border)] pb-4 sm:flex-row sm:items-start sm:justify-between">
                         <div>
@@ -1716,9 +1733,9 @@ setStep(8);
                               }
                               aria-pressed={isSelected}
                               className={[
-                                "group flex min-h-[112px] flex-col justify-between rounded-[1.25rem] border p-4 text-left shadow-[0_10px_24px_rgba(17,17,17,0.04)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_16px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
+                                "group flex min-h-[112px] flex-col justify-between rounded-md border p-4 text-left shadow-[0_10px_24px_rgba(17,17,17,0.04)] transition duration-200 ease-out hover:-translate-y-1 hover:shadow-[0_16px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]",
                                 isSelected
-                                  ? "border-[var(--accent)] bg-[#fff7f2] shadow-[0_14px_30px_rgba(17,17,17,0.08)]"
+                                  ? "border-[var(--accent)] bg-[var(--accent-subtle)] shadow-[0_14px_30px_rgba(17,17,17,0.08)]"
                                   : "border-[var(--border)] bg-[var(--background)]",
                               ].join(" ")}
                             >
@@ -1751,7 +1768,7 @@ setStep(8);
                 })}
               </div>
             ) : (
-              <div className="rounded-[1.75rem] border border-dashed border-[var(--border)] bg-[var(--surface)] px-5 py-8 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_28px_rgba(17,17,17,0.04)]">
+              <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] px-5 py-8 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_28px_rgba(17,17,17,0.04)]">
                 No skills are selected yet. Go back to choose the skills you want
                 to rate.
               </div>
@@ -1775,7 +1792,7 @@ setStep(8);
                   }
                 }}
                 disabled={!canContinueFromStepSix}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
               >
                 Continue
               </button>
@@ -1788,7 +1805,7 @@ setStep(8);
                 Role assessment
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+              <h1 className="font-display max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
                 Let&apos;s see how you think.
               </h1>
 
@@ -1818,7 +1835,7 @@ setStep(8);
 
             {currentAssessmentQuestion ? (
               <div className="space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-[var(--border)] bg-[var(--surface)] px-4 py-3 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
                   <div className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
                     Question {assessmentQuestionIndex + 1} of {assessmentQuestions.length}
                   </div>
@@ -1840,7 +1857,7 @@ setStep(8);
                 />
               </div>
             ) : (
-              <div className="rounded-[1.75rem] border border-dashed border-[var(--border)] bg-[var(--surface)] px-5 py-8 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_28px_rgba(17,17,17,0.04)]">
+              <div className="rounded-lg border border-dashed border-[var(--border)] bg-[var(--surface)] px-5 py-8 text-sm leading-6 text-[var(--muted)] shadow-[0_12px_28px_rgba(17,17,17,0.04)]">
                 No role assessment is available for this selection yet.
               </div>
             )}
@@ -1876,7 +1893,7 @@ setStep(8);
                   setAssessmentQuestionIndex((current) => current + 1);
                 }}
                 disabled={!canContinueFromStepSeven}
-                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
+                className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
               >
                 {isFinalAssessmentQuestion ? "Finish assessment" : "Continue"}
               </button>
@@ -1889,7 +1906,7 @@ setStep(8);
                 Profile reveal
               </p>
 
-              <h1 className="font-ui max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
+              <h1 className="font-display max-w-3xl text-[clamp(2.6rem,6.4vw,5.2rem)] font-bold tracking-[-0.07em] text-[var(--foreground)] leading-[0.94]">
                 Your LITMUS profile is ready.
               </h1>
 
@@ -1899,7 +1916,7 @@ setStep(8);
               </p>
             </div>
 
-            <section className="rounded-[2rem] border border-[var(--border-strong)] bg-[var(--surface)] p-5 shadow-[0_18px_40px_rgba(17,17,17,0.08)] sm:p-6">
+            <section className="rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] p-5 shadow-[0_18px_40px_rgba(17,17,17,0.08)] sm:p-6">
               <div className="flex flex-col gap-3 border-b border-[var(--border)] pb-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -1916,7 +1933,7 @@ setStep(8);
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--background)] px-4 py-4">
+                <div className="rounded-md border border-[var(--border)] bg-[var(--background)] px-4 py-4">
                   <p className="font-ui text-xs uppercase tracking-[0.26em] text-[var(--muted)]">
                     Target role
                   </p>
@@ -1925,7 +1942,7 @@ setStep(8);
                   </p>
                 </div>
 
-                <div className="rounded-[1.25rem] border border-[var(--border)] bg-[var(--background)] px-4 py-4">
+                <div className="rounded-md border border-[var(--border)] bg-[var(--background)] px-4 py-4">
                   <p className="font-ui text-xs uppercase tracking-[0.26em] text-[var(--muted)]">
                     Career goal
                   </p>
@@ -1947,7 +1964,7 @@ setStep(8);
               </div>
 
               <div className="grid gap-4 xl:grid-cols-2">
-                <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -1980,7 +1997,7 @@ setStep(8);
                   </div>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -2012,7 +2029,7 @@ setStep(8);
                   </div>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -2049,7 +2066,7 @@ setStep(8);
                   </div>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)]">
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
@@ -2112,7 +2129,7 @@ setStep(8);
                 ].map((item) => (
                   <article
                     key={item.title}
-                    className="rounded-[1.5rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(17,17,17,0.08)]"
+                    className="rounded-md border border-[var(--border)] bg-[var(--surface)] p-5 shadow-[0_12px_28px_rgba(17,17,17,0.05)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(17,17,17,0.08)]"
                   >
                     <p className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
                       Evidence
@@ -2128,7 +2145,7 @@ setStep(8);
               </div>
             </section>
 
-            <section className="rounded-[2rem] border border-[var(--border-strong)] bg-[var(--surface)] p-6 shadow-[0_18px_40px_rgba(17,17,17,0.08)]">
+            <section className="rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] p-6 shadow-[0_18px_40px_rgba(17,17,17,0.08)]">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="space-y-2">
                   <p className="font-ui text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
@@ -2143,12 +2160,13 @@ setStep(8);
                   </p>
                 </div>
 
-                <Link
-                  href="/dashboard"
-                  className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(255,90,40,0.28)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[#e85224] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+                <button
+                  type="button"
+                  onClick={() => router.push("/transition")}
+                  className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
                 >
                   Build my LITMUS profile
-                </Link>
+                </button>
               </div>
 
               <div className="mt-5 flex flex-col gap-3 border-t border-[var(--border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
