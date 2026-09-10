@@ -139,6 +139,10 @@ def _cors_origins() -> list[str]:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins(),
+    # Belt and braces: Vercel renames/preview URLs change often. The explicit
+    # FRONTEND_URL above stays the primary allowlist; this regex only covers
+    # https vercel.app subdomains so a rename never hard-breaks the dashboard.
+    allow_origin_regex=r"https://[a-z0-9-]+\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
