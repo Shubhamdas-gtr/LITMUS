@@ -1,5 +1,6 @@
 import os
-from typing import Literal
+import time
+from typing import Callable, Literal, TypeVar
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from pydantic import BaseModel
@@ -51,6 +52,31 @@ supabase: Client = create_client(
     SUPABASE_URL,
     SUPABASE_SECRET_KEY,
 )
+
+T = TypeVar("T")
+
+
+def _retry_supabase(description: str, operation: Callable[[], T], attempts: int = 3) -> T:
+    """Run a Supabase query, retrying transient transport failures.
+
+    Render Free -> Supabase links occasionally drop a read mid-stream
+    (httpx/httpcore ReadError over HTTP/2). The dashboard fires ~7 reads in
+    parallel on mount, so one blip used to fail a whole panel. Retrying keeps
+    behavior identical on success; persistent failures still raise the last
+    error for existing handlers to translate as before.
+    """
+    last_error: Exception | None = None
+    for attempt in range(max(1, attempts)):
+        try:
+            return operation()
+        except HTTPException:
+            raise
+        except Exception as error:
+            last_error = error
+            if attempt < attempts - 1:
+                time.sleep(0.4 * (attempt + 1))
+    assert last_error is not None
+    raise last_error
 
 
 def get_user_from_token(access_token: str):
@@ -1156,13 +1182,14 @@ def get_profile(
         )
 
     try:
-        profile_response = (
-            supabase
+        profile_response = _retry_supabase(
+            "profile",
+            lambda: supabase
             .table("profiles")
             .select("*")
             .eq("auth_user_id", user.id)
             .single()
-            .execute()
+            .execute(),
         )
     except Exception:
         profile_response = None
@@ -1176,29 +1203,36 @@ def get_profile(
     profile = profile_response.data
     profile_id = profile["id"]
 
-    interests_response = (
-        supabase
-        .table("profile_interests")
-        .select("interest")
-        .eq("profile_id", profile_id)
-        .execute()
-    )
-
-    skills_response = (
-        supabase
-        .table("profile_skills")
-        .select("skill, confidence")
-        .eq("profile_id", profile_id)
-        .execute()
-    )
-
-    answers_response = (
-        supabase
-        .table("assessment_answers")
-        .select("question_id, selected_answer")
-        .eq("profile_id", profile_id)
-        .execute()
-    )
+    try:
+        interests_response = _retry_supabase(
+            "interests",
+            lambda: supabase
+            .table("profile_interests")
+            .select("interest")
+            .eq("profile_id", profile_id)
+            .execute(),
+        )
+        skills_response = _retry_supabase(
+            "skills",
+            lambda: supabase
+            .table("profile_skills")
+            .select("skill, confidence")
+            .eq("profile_id", profile_id)
+            .execute(),
+        )
+        answers_response = _retry_supabase(
+            "assessment answers",
+            lambda: supabase
+            .table("assessment_answers")
+            .select("question_id, selected_answer")
+            .eq("profile_id", profile_id)
+            .execute(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Profile temporarily unavailable. Please retry.",
+        )
 
     return {
     "profile": profile,
@@ -1212,13 +1246,14 @@ def get_profile(
 def _resolve_profile_for_user(user) -> dict:
     """Return the profiles row for the authenticated user or raise 404."""
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "profile",
+            lambda: supabase
             .table("profiles")
             .select("id")
             .eq("auth_user_id", user.id)
             .single()
-            .execute()
+            .execute(),
         )
     except Exception:
         raise HTTPException(
@@ -1262,13 +1297,14 @@ def _load_repo_freshness_snapshot(github_profile_id: str | None) -> dict[str, st
 
 def _load_profile_context(profile_id: str) -> dict:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "profile",
+            lambda: supabase
             .table("profiles")
             .select("id, career_goal, target_role")
             .eq("id", profile_id)
             .single()
-            .execute()
+            .execute(),
         )
     except Exception:
         raise HTTPException(
@@ -1287,14 +1323,15 @@ def _load_profile_context(profile_id: str) -> dict:
 
 def _load_latest_skill_gap(profile_id: str) -> dict | None:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "skill gap",
+            lambda: supabase
             .table("skill_gap_analyses")
             .select("*")
             .eq("profile_id", profile_id)
             .order("created_at", desc=True)
             .limit(1)
-            .execute()
+            .execute(),
         )
     except Exception:
         return None
@@ -1304,14 +1341,15 @@ def _load_latest_skill_gap(profile_id: str) -> dict | None:
 
 def _load_latest_roadmap(profile_id: str) -> dict | None:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "roadmap",
+            lambda: supabase
             .table("career_roadmaps")
             .select("*")
             .eq("profile_id", profile_id)
             .order("created_at", desc=True)
             .limit(1)
-            .execute()
+            .execute(),
         )
     except Exception:
         return None
@@ -1321,14 +1359,15 @@ def _load_latest_roadmap(profile_id: str) -> dict | None:
 
 def _load_latest_resume(profile_id: str) -> dict | None:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "resume",
+            lambda: supabase
             .table("resume_analyses")
             .select("*")
             .eq("profile_id", profile_id)
             .order("created_at", desc=True)
             .limit(1)
-            .execute()
+            .execute(),
         )
     except Exception:
         return None
@@ -1338,13 +1377,14 @@ def _load_latest_resume(profile_id: str) -> dict | None:
 
 def _load_completed_roadmap_skills(profile_id: str) -> list[str]:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "roadmap progress",
+            lambda: supabase
             .table("roadmap_progress")
             .select("skill")
             .eq("profile_id", profile_id)
             .eq("completed", True)
-            .execute()
+            .execute(),
         )
     except Exception:
         return []
@@ -1359,15 +1399,16 @@ def _load_completed_roadmap_skills(profile_id: str) -> list[str]:
 
 def _load_github_profile_context(github_profile_id: str) -> dict | None:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "github profile",
+            lambda: supabase
             .table("github_profiles")
             .select(
                 "id, profile_id, github_user_id, username, profile_bio, avatar_url, last_synced_at"
             )
             .eq("id", github_profile_id)
             .single()
-            .execute()
+            .execute(),
         )
     except Exception:
         return None
@@ -1377,12 +1418,13 @@ def _load_github_profile_context(github_profile_id: str) -> dict | None:
 
 def _load_github_repositories(github_profile_id: str) -> list[dict]:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "github repositories",
+            lambda: supabase
             .table("github_repositories")
             .select("*")
             .eq("github_profile_id", github_profile_id)
-            .execute()
+            .execute(),
         )
     except Exception:
         return []
@@ -1392,14 +1434,15 @@ def _load_github_repositories(github_profile_id: str) -> list[dict]:
 
 def _load_github_activity(github_profile_id: str) -> dict | None:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "github activity",
+            lambda: supabase
             .table("github_activity")
             .select("*")
             .eq("github_profile_id", github_profile_id)
             .order("period_start", desc=True)
             .limit(1)
-            .execute()
+            .execute(),
         )
     except Exception:
         return None
@@ -1409,12 +1452,13 @@ def _load_github_activity(github_profile_id: str) -> dict | None:
 
 def _load_generation_receipts(profile_id: str) -> dict[str, str]:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "generation receipts",
+            lambda: supabase
             .table("lead_generation_receipts")
             .select("detected_event_id, dedup_key")
             .eq("profile_id", profile_id)
-            .execute()
+            .execute(),
         )
     except Exception:
         return {}
@@ -1430,15 +1474,16 @@ def _load_generation_receipts(profile_id: str) -> dict[str, str]:
 
 def _load_repo_push_events(github_profile_id: str) -> list[dict]:
     try:
-        response = (
-            supabase
+        response = _retry_supabase(
+            "repo push events",
+            lambda: supabase
             .table("github_detected_events")
             .select("*")
             .eq("github_profile_id", github_profile_id)
             .eq("event_type", "repo_pushed")
             .order("event_timestamp", desc=True)
             .limit(25)
-            .execute()
+            .execute(),
         )
     except Exception:
         return []
@@ -1978,24 +2023,31 @@ def get_github_evidence(
     github_profile = github_response.data
     github_profile_id = github_profile["id"]
 
-    repos_response = (
-        supabase
-        .table("github_repositories")
-        .select("*")
-        .eq("github_profile_id", github_profile_id)
-        .order("stars", desc=True)
-        .execute()
-    )
-
-    activity_response = (
-        supabase
-        .table("github_activity")
-        .select("*")
-        .eq("github_profile_id", github_profile_id)
-        .order("period_start", desc=True)
-        .limit(1)
-        .execute()
-    )
+    try:
+        repos_response = _retry_supabase(
+            "github repositories",
+            lambda: supabase
+            .table("github_repositories")
+            .select("*")
+            .eq("github_profile_id", github_profile_id)
+            .order("stars", desc=True)
+            .execute(),
+        )
+        activity_response = _retry_supabase(
+            "github activity",
+            lambda: supabase
+            .table("github_activity")
+            .select("*")
+            .eq("github_profile_id", github_profile_id)
+            .order("period_start", desc=True)
+            .limit(1)
+            .execute(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="GitHub evidence temporarily unavailable. Please retry.",
+        )
 
     repos = repos_response.data or []
     activity = activity_response.data[0] if activity_response.data else None
@@ -2570,15 +2622,22 @@ def get_profile_leads(
     profile = _resolve_profile_for_user(user)
     profile_id = profile["id"]
 
-    leads_response = (
-        supabase
-        .table("leads")
-        .select("*")
-        .eq("profile_id", profile_id)
-        .order("generated_at", desc=True)
-        .limit(50)
-        .execute()
-    )
+    try:
+        leads_response = _retry_supabase(
+            "leads",
+            lambda: supabase
+            .table("leads")
+            .select("*")
+            .eq("profile_id", profile_id)
+            .order("generated_at", desc=True)
+            .limit(50)
+            .execute(),
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Leads temporarily unavailable. Please retry.",
+        )
     lead_rows = leads_response.data or []
     if not lead_rows:
         return {"leads": []}
@@ -2593,26 +2652,40 @@ def get_profile_leads(
     repository_rows = []
 
     if lead_ids:
-        draft_rows = (
-            supabase
-            .table("lead_drafts")
-            .select("*")
-            .in_("lead_id", lead_ids)
-            .execute()
-            .data
-            or []
-        )
+        try:
+            draft_rows = _retry_supabase(
+                "lead drafts",
+                lambda: supabase
+                .table("lead_drafts")
+                .select("*")
+                .in_("lead_id", lead_ids)
+                .execute()
+                .data
+                or [],
+            )
+        except Exception as error:
+            raise HTTPException(
+                status_code=503,
+                detail="Leads temporarily unavailable. Please retry.",
+            )
 
     if detected_event_ids:
-        event_rows = (
-            supabase
-            .table("github_detected_events")
-            .select("*")
-            .in_("id", detected_event_ids)
-            .execute()
-            .data
-            or []
-        )
+        try:
+            event_rows = _retry_supabase(
+                "detected events",
+                lambda: supabase
+                .table("github_detected_events")
+                .select("*")
+                .in_("id", detected_event_ids)
+                .execute()
+                .data
+                or [],
+            )
+        except Exception as error:
+            raise HTTPException(
+                status_code=503,
+                detail="Leads temporarily unavailable. Please retry.",
+            )
 
         repo_ids = [
             row["github_repo_id"]
@@ -2620,16 +2693,23 @@ def get_profile_leads(
             if row.get("github_repo_id") is not None
         ]
         if repo_ids:
-            repository_rows = (
-                supabase
-                .table("github_repositories")
-                .select("*")
-                .eq("github_profile_id", lead_rows[0]["github_profile_id"])
-                .in_("github_repo_id", repo_ids)
-                .execute()
-                .data
-                or []
-            )
+            try:
+                repository_rows = _retry_supabase(
+                    "repositories",
+                    lambda: supabase
+                    .table("github_repositories")
+                    .select("*")
+                    .eq("github_profile_id", lead_rows[0]["github_profile_id"])
+                    .in_("github_repo_id", repo_ids)
+                    .execute()
+                    .data
+                    or [],
+                )
+            except Exception as error:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Leads temporarily unavailable. Please retry.",
+                )
 
     draft_by_lead_id = {
         row["lead_id"]: row for row in draft_rows if row.get("lead_id")
@@ -2928,13 +3008,20 @@ def get_roadmap_progress(
 
     profile_id = profile_response.data["id"]
 
-    progress_response = (
-        supabase
-        .table("roadmap_progress")
-        .select("skill, completed, completed_at")
-        .eq("profile_id", profile_id)
-        .execute()
-    )
+    try:
+        progress_response = _retry_supabase(
+            "roadmap progress",
+            lambda: supabase
+            .table("roadmap_progress")
+            .select("skill, completed, completed_at")
+            .eq("profile_id", profile_id)
+            .execute(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Progress temporarily unavailable. Please retry.",
+        )
 
     return {
         "skills": progress_response.data or [],
