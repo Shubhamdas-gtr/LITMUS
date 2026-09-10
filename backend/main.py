@@ -22,6 +22,8 @@ from services.ai_service import (
 from services.resume_parser import extract_resume_text
 from services.lead_service import (
     DRAFT_PROMPT_VERSION,
+    fallback_lead_candidate,
+    fallback_linkedin_draft,
     generate_lead_candidate,
     generate_linkedin_draft,
 )
@@ -1453,6 +1455,7 @@ async def _generate_and_store_leads_for_events(
                 "repo_name": event.get("payload", {}).get("repo_name") or repository.get("name"),
                 "url": event.get("payload", {}).get("url") or repository.get("html_url"),
                 "title": event.get("payload", {}).get("title") or repository.get("name"),
+                "latest_commit": event.get("payload", {}).get("latest_commit"),
             },
             "repository": {
                 "github_repo_id": repository.get("github_repo_id"),
@@ -1480,12 +1483,22 @@ async def _generate_and_store_leads_for_events(
             "allowed_skills": context["allowed_skills"],
         }
 
-        lead_candidate = await generate_lead_candidate(event_context)
+        try:
+            lead_candidate = await generate_lead_candidate(event_context)
+        except Exception:
+            lead_candidate = None
+        if not lead_candidate:
+            lead_candidate = fallback_lead_candidate(event_context)
         if not lead_candidate:
             continue
 
-        draft_candidate = await generate_linkedin_draft(event_context, lead_candidate)
+        try:
+            draft_candidate = await generate_linkedin_draft(event_context, lead_candidate)
+        except Exception:
+            draft_candidate = None
         if not draft_candidate:
+            draft_candidate = fallback_linkedin_draft(event_context, lead_candidate)
+        if not draft_candidate or not str(draft_candidate.get("body") or "").strip():
             continue
 
         dedup_key = str(event.get("dedup_key") or "").strip()

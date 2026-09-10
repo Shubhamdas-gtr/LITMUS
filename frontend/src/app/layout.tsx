@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import type { ReactNode } from "react";
+import SiteFooter from "@/components/SiteFooter";
+import SiteNav from "@/components/SiteNav";
 import "./globals.css";
 
 const displayFont = localFont({
@@ -71,7 +73,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
       className={`${displayFont.variable} ${bodyFont.variable} ${compactFont.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)]">
-        {children}
+        <SiteNav />
+        <div className="flex-1">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );

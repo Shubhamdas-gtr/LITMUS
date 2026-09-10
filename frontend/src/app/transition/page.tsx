@@ -34,20 +34,9 @@ export default function TransitionPage() {
       <div className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-4 py-8 sm:px-6 lg:px-8">
         <section className="grid w-full gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
           <div className="space-y-6">
-            <div className="inline-flex items-center gap-3">
-              <div className="litmus-brand-mark">
-                <span>L</span>
-              </div>
-
-              <div className="flex flex-col">
-                <span className="litmus-brand-wordmark text-sm font-semibold text-[var(--foreground)]">
-                  LITMUS
-                </span>
-                <span className="litmus-brand-tagline text-[0.68rem] text-[var(--muted)]">
-                  career intelligence console
-                </span>
-              </div>
-            </div>
+            <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
+              Handoff
+            </p>
 
             <div className="space-y-4">
               <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">

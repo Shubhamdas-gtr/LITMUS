@@ -2,26 +2,26 @@
 
 :root {
   --background: #05060a;
-  --foreground: #f4f1ea;
+  --foreground: #f2f0e9;
   --surface: #0d1018;
   --surface-strong: #121827;
   --surface-soft: #0a0d14;
   --surface-elevated: #151c2e;
-  --muted: #98a0b6;
-  --muted-strong: #c7cde0;
-  --accent: #bbff44;
-  --accent-strong: #8ddc10;
-  --accent-subtle: rgba(187, 255, 68, 0.12);
+  --muted: #a8b0c6;
+  --muted-strong: #d3d8e8;
+  --accent: #9ed62e;
+  --accent-strong: #7fa826;
+  --accent-subtle: rgba(158, 214, 46, 0.12);
   --violet: #8d63ff;
   --violet-subtle: rgba(141, 99, 255, 0.14);
-  --success: #8ddc10;
-  --success-subtle: rgba(141, 220, 16, 0.12);
+  --success: #8ab92e;
+  --success-subtle: rgba(138, 185, 46, 0.12);
   --warning: #f1b84d;
   --warning-subtle: rgba(241, 184, 77, 0.12);
   --danger: #ff6b6b;
   --danger-subtle: rgba(255, 107, 107, 0.12);
   --border: rgba(200, 205, 230, 0.18);
-  --border-strong: rgba(187, 255, 68, 0.38);
+  --border-strong: rgba(158, 214, 46, 0.32);
   --ink: #05070b;
   --ink-strong: #090c11;
 }
@@ -51,13 +51,24 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    radial-gradient(1200px 700px at 50% -10%, rgba(141, 99, 255, 0.26), transparent 55%),
-    radial-gradient(900px 500px at 18% 12%, rgba(141, 99, 255, 0.16), transparent 48%),
-    radial-gradient(800px 500px at 82% 18%, rgba(187, 255, 68, 0.1), transparent 44%),
+    radial-gradient(1200px 700px at 50% -10%, rgba(141, 99, 255, 0.22), transparent 55%),
+    radial-gradient(900px 500px at 18% 12%, rgba(141, 99, 255, 0.13), transparent 48%),
+    radial-gradient(800px 500px at 82% 18%, rgba(158, 214, 46, 0.07), transparent 44%),
     linear-gradient(180deg, #06070c 0%, #070912 42%, #05060a 100%);
   color: var(--foreground);
-  font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Inter", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: 0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+p,
+li {
+  line-height: 1.65;
 }
 
 body::before {
@@ -67,10 +78,10 @@ body::before {
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(ellipse 65% 45% at 50% 0%, rgba(141, 99, 255, 0.22), transparent 55%),
-    radial-gradient(circle at 50% 12%, rgba(187, 255, 68, 0.08), transparent 20%),
-    radial-gradient(circle at 8% 18%, rgba(141, 99, 255, 0.12), transparent 18%),
-    radial-gradient(circle at 92% 18%, rgba(141, 99, 255, 0.12), transparent 16%);
+    radial-gradient(ellipse 65% 45% at 50% 0%, rgba(141, 99, 255, 0.18), transparent 55%),
+    radial-gradient(circle at 50% 12%, rgba(158, 214, 46, 0.06), transparent 20%),
+    radial-gradient(circle at 8% 18%, rgba(141, 99, 255, 0.1), transparent 18%),
+    radial-gradient(circle at 92% 18%, rgba(141, 99, 255, 0.1), transparent 16%);
   filter: blur(4px);
   opacity: 0.95;
 }
@@ -109,20 +120,25 @@ a {
 }
 
 .font-ui {
-  font-family: var(--font-body), ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", "Inter", sans-serif;
+  letter-spacing: 0.005em;
 }
 
 .font-display {
-  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.015em;
+  line-height: 1.08;
 }
 
 .font-hero {
-  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.015em;
+  line-height: 1.05;
 }
 
 .font-compact {
-  font-family: var(--font-compact), var(--font-body), ui-sans-serif, system-ui,
+  font-family: var(--font-body), ui-sans-serif, system-ui,
     -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -130,8 +146,11 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
-  letter-spacing: -0.05em;
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+  text-wrap: balance;
+  font-weight: 700;
 }
 
 .litmus-shell {
@@ -146,60 +165,12 @@ h4 {
   inset: -8rem -6rem auto;
   height: 32rem;
   background:
-    radial-gradient(circle at 50% 50%, rgba(141, 99, 255, 0.28), transparent 55%),
-    radial-gradient(circle at 40% 40%, rgba(187, 255, 68, 0.08), transparent 26%);
+    radial-gradient(circle at 50% 50%, rgba(141, 99, 255, 0.22), transparent 55%),
+    radial-gradient(circle at 40% 40%, rgba(158, 214, 46, 0.06), transparent 26%);
   filter: blur(32px);
-  opacity: 1;
+  opacity: 0.9;
   z-index: -1;
   animation: auraFloat 18s ease-in-out infinite;
-}
-
-.litmus-brand-mark {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 1rem;
-  border: 1px solid var(--border-strong);
-  background:
-    radial-gradient(circle at 28% 28%, rgba(187, 255, 68, 0.24), transparent 26%),
-    linear-gradient(180deg, rgba(18, 24, 39, 0.96), rgba(8, 10, 16, 0.98));
-  color: var(--accent);
-  box-shadow:
-    0 0 0 1px rgba(187, 255, 68, 0.08),
-    0 14px 32px rgba(0, 0, 0, 0.36),
-    0 0 24px rgba(141, 99, 255, 0.28);
-}
-
-.litmus-brand-mark::before {
-  content: "";
-  position: absolute;
-  inset: 0.5rem;
-  border-radius: 0.55rem;
-  border: 1px solid rgba(187, 255, 68, 0.2);
-  opacity: 0.5;
-}
-
-.litmus-brand-mark span {
-  position: relative;
-  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.08em;
-}
-
-.litmus-brand-wordmark {
-  font-family: var(--font-display), ui-serif, Georgia, "Times New Roman", serif;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-}
-
-.litmus-brand-tagline {
-  letter-spacing: 0.26em;
-  text-transform: uppercase;
 }
 
 .litmus-panel {
@@ -220,7 +191,7 @@ h4 {
     var(--surface-strong);
   box-shadow:
     0 24px 60px rgba(0, 0, 0, 0.44),
-    0 0 0 1px rgba(187, 255, 68, 0.05) inset;
+    0 0 0 1px rgba(158, 214, 46, 0.04) inset;
 }
 
 .litmus-surface {
@@ -251,15 +222,15 @@ h4 {
   width: min(22rem, 72vw);
   aspect-ratio: 1;
   border-radius: 999px;
-  border: 1px solid rgba(187, 255, 68, 0.18);
+  border: 1px solid rgba(158, 214, 46, 0.16);
   background:
-    radial-gradient(circle at 50% 50%, rgba(187, 255, 68, 0.2), transparent 24%),
-    radial-gradient(circle at 50% 50%, rgba(141, 99, 255, 0.24), transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.1), transparent 70%);
+    radial-gradient(circle at 50% 50%, rgba(158, 214, 46, 0.14), transparent 24%),
+    radial-gradient(circle at 50% 50%, rgba(141, 99, 255, 0.2), transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08), transparent 70%);
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    0 0 24px rgba(141, 99, 255, 0.28),
-    0 0 60px rgba(187, 255, 68, 0.16);
+    0 0 18px rgba(141, 99, 255, 0.22),
+    0 0 40px rgba(158, 214, 46, 0.1);
 }
 
 .litmus-core::before,
@@ -274,7 +245,7 @@ h4 {
 
 .litmus-core::after {
   inset: -28%;
-  border-color: rgba(187, 255, 68, 0.2);
+  border-color: rgba(158, 214, 46, 0.16);
   animation-duration: 12s;
   animation-direction: reverse;
 }
@@ -289,7 +260,7 @@ h4 {
   position: absolute;
   inset: 0;
   transform: translateY(-100%);
-  background: linear-gradient(180deg, transparent, rgba(187, 255, 68, 0.18), transparent);
+  background: linear-gradient(180deg, transparent, rgba(158, 214, 46, 0.12), transparent);
   animation: scan 3.5s ease-in-out infinite;
   pointer-events: none;
 }
@@ -322,9 +293,9 @@ h4 {
   width: 1px;
   background: linear-gradient(
     180deg,
-    rgba(187, 255, 68, 0.3),
+    rgba(158, 214, 46, 0.26),
     rgba(141, 99, 255, 0.2) 60%,
-    rgba(187, 255, 68, 0.08)
+    rgba(158, 214, 46, 0.07)
   );
 }
 
@@ -335,7 +306,7 @@ h4 {
     90deg,
     transparent,
     rgba(200, 205, 230, 0.12) 15%,
-    rgba(187, 255, 68, 0.12) 50%,
+    rgba(158, 214, 46, 0.1) 50%,
     rgba(200, 205, 230, 0.12) 85%,
     transparent
   );
@@ -360,7 +331,7 @@ h4 {
 
 .litmus-dot-success {
   background: var(--success);
-  box-shadow: 0 0 6px rgba(141, 220, 16, 0.5);
+  box-shadow: 0 0 6px rgba(138, 185, 46, 0.45);
 }
 
 .litmus-grid-lines {
@@ -368,6 +339,29 @@ h4 {
     linear-gradient(rgba(200, 205, 230, 0.04) 1px, transparent 1px),
     linear-gradient(90deg, rgba(200, 205, 230, 0.04) 1px, transparent 1px);
   background-size: 3rem 3rem;
+}
+
+/* Readability: calm tiny uppercase labels and keep body text legible. */
+.litmus-eyebrow {
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Guardrail: decorative display font gets unreadable below -0.03em. */
+[class*="tracking-[-0.07em]"],
+[class*="tracking-[-0.06em]"] {
+  letter-spacing: -0.02em !important;
+}
+
+[class*="tracking-[-0.05em]"],
+[class*="tracking-[-0.04em]"] {
+  letter-spacing: -0.015em !important;
+}
+
+::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -60,6 +60,13 @@ def detect_repo_pushed(
         title = repo.get("full_name") or repo.get("name")
         if title:
             payload["title"] = title
+        latest_commit = repo.get("latest_commit")
+        if isinstance(latest_commit, dict) and latest_commit:
+            payload["latest_commit"] = {
+                key: latest_commit.get(key)
+                for key in ("sha", "message", "date")
+                if latest_commit.get(key)
+            }
 
         events.append(
             {
@@ -215,6 +222,38 @@ def _commit_matches_authenticated_user(
     return False
 
 
+def _fetch_latest_commit(
+    client: httpx.Client,
+    headers: dict[str, str],
+    username: str,
+    repo_name: str,
+) -> dict | None:
+    """Return the latest commit {sha, message, date} or None (never raises)."""
+    try:
+        result = _get_json(
+            client,
+            f"{GITHUB_API_URL}/repos/{username}/{repo_name}/commits",
+            headers,
+            params={"per_page": 1},
+        )
+    except GitHubAPIError:
+        return None
+    commits = result if isinstance(result, list) else []
+    if not commits:
+        return None
+    head = commits[0] if isinstance(commits[0], dict) else {}
+    meta = head.get("commit") or {}
+    author_meta = meta.get("author") or {}
+    message = str(meta.get("message") or "").strip()
+    if not message:
+        return None
+    return {
+        "sha": head.get("sha"),
+        "message": message[:300],
+        "date": author_meta.get("date"),
+    }
+
+
 def collect_github_evidence(provider_token: str) -> dict:
     """Fetch and normalize a user's public GitHub evidence in a single pass.
 
@@ -311,6 +350,26 @@ def collect_github_evidence(provider_token: str) -> dict:
                 language_distribution[lang] = (
                     language_distribution.get(lang, 0) + int(size or 0)
                 )
+
+        # Bounded enrichment: latest commit message for recently pushed repos
+        # only (max 20, pushed within ~90 days). Failures are ignored so sync
+        # never breaks because of this best-effort signal.
+        try:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+            candidates: list[tuple[datetime, dict]] = []
+            for entry in enriched_repos:
+                pushed = _parse_github_timestamp(entry.get("repo_updated_at"))
+                if pushed and pushed >= cutoff:
+                    candidates.append((pushed, entry))
+            candidates.sort(key=lambda item: item[0], reverse=True)
+            for _, entry in candidates[:20]:
+                commit = _fetch_latest_commit(
+                    client, headers, username, entry.get("name") or ""
+                )
+                if commit:
+                    entry["latest_commit"] = commit
+        except Exception:
+            pass
 
         since = (datetime.now(timezone.utc) - timedelta(days=30)).strftime(
             "%Y-%m-%dT%H:%M:%SZ"

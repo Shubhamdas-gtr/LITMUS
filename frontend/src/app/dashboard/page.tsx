@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { API_URL } from "@/lib/api";
@@ -178,6 +179,7 @@ const githubSyncStateLabel: Record<GithubSyncState, string> = {
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [interests, setInterests] = useState<string[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -637,6 +639,7 @@ export default function DashboardPage() {
 
       if (!accessToken) {
         setError("Please sign in to view your dashboard.");
+        router.replace("/auth");
         return;
       }
 
@@ -661,7 +664,7 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [router]);
 
   const loadRoadmap = useCallback(async () => {
     try {
@@ -850,6 +853,20 @@ export default function DashboardPage() {
 
   useEffect(() => {
     void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        router.replace("/auth");
+        return;
+      }
+      const existingName = String(
+        session.user.user_metadata?.display_name ?? "",
+      ).trim();
+      if (!existingName) {
+        router.replace("/welcome");
+        return;
+      }
       await Promise.all([
         loadDashboard(),
         loadRoadmap(),
@@ -860,7 +877,7 @@ export default function DashboardPage() {
         loadGeneratedLeads(),
       ]);
     })();
-  }, [loadDashboard, loadProgress, loadRoadmap, loadSkillGap, detectGithub, loadGithubEvidence, loadGeneratedLeads]);
+  }, [loadDashboard, loadProgress, loadRoadmap, loadSkillGap, detectGithub, loadGithubEvidence, loadGeneratedLeads, router]);
 
   // Keep OAuth-linked state fresh after the callback redirect (which does
   // exchangeCodeForSession server-side and sets new cookies). Without this,
@@ -884,20 +901,36 @@ export default function DashboardPage() {
   return (
     <main className="litmus-shell relative isolate overflow-hidden litmus-grid-lines">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-4 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-4 border-b border-[var(--border)] py-3 pb-4 sm:flex-row sm:items-center sm:justify-between sm:py-5">
-          <div className="inline-flex items-center gap-3">
-            <div className="litmus-brand-mark">
-              <span>L</span>
-            </div>
-
-            <div className="flex flex-col">
-              <span className="litmus-brand-wordmark text-sm font-semibold text-[var(--foreground)]">
-                LITMUS
-              </span>
-              <span className="litmus-brand-tagline text-[0.68rem] text-[var(--muted)]">
+        <header className="flex flex-col gap-4 border-b border-[var(--border)] py-3 pb-4 sm:py-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
                 career intelligence console
-              </span>
+              </p>
+              <h1 className="text-2xl font-bold tracking-[-0.05em] text-[var(--foreground)]">
+                Dashboard
+              </h1>
             </div>
+            <nav
+              className="flex flex-wrap gap-2"
+              aria-label="Dashboard sections"
+            >
+              {[
+                { href: "#github", label: "GitHub" },
+                { href: "#leads", label: "Leads" },
+                { href: "#profile", label: "Profile" },
+                { href: "#skill-gap", label: "Skill gap" },
+                { href: "#roadmap", label: "Roadmap" },
+              ].map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="rounded-full border border-[var(--border)] bg-[rgba(8,10,16,0.78)] px-3 py-1.5 text-[0.62rem] uppercase tracking-[0.2em] text-[var(--muted)] transition duration-200 hover:border-[var(--border-strong)] hover:text-[var(--foreground)]"
+                >
+                  {item.label}
+                </a>
+              ))}
+            </nav>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
@@ -972,7 +1005,7 @@ export default function DashboardPage() {
         </header>
 
         {githubConnected ? (
-          <section className="litmus-panel mt-6 rounded-xl p-6 sm:p-7">
+          <section id="github" className="litmus-panel mt-6 scroll-mt-28 rounded-xl p-6 sm:p-7">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
@@ -1189,7 +1222,7 @@ export default function DashboardPage() {
           </section>
         ) : null}
 
-        <section className="mt-6 litmus-panel rounded-xl p-6 sm:p-7">
+        <section id="leads" className="mt-6 litmus-panel scroll-mt-28 rounded-xl p-6 sm:p-7">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
@@ -1511,7 +1544,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <section className="grid gap-6 py-6 lg:grid-cols-[1.12fr_0.88fr] lg:items-start lg:py-8">
+        <section id="profile" className="grid scroll-mt-28 gap-6 py-6 lg:grid-cols-[1.12fr_0.88fr] lg:items-start lg:py-8">
           <article className="litmus-panel-strong rounded-xl p-6 sm:p-8">
             {loading ? (
               <div className="space-y-4">
@@ -1860,7 +1893,7 @@ export default function DashboardPage() {
           </article>
         </section>
 
-        <section className="litmus-panel rounded-xl p-6 sm:p-7">
+        <section id="skill-gap" className="litmus-panel scroll-mt-28 rounded-xl p-6 sm:p-7">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
@@ -2005,7 +2038,7 @@ export default function DashboardPage() {
           )}
         </section>
 
-        <section className="mt-6 rounded-xl border border-[var(--border-strong)] bg-[linear-gradient(180deg,rgba(141,99,255,0.08),transparent_16%),var(--surface-strong)] p-6 shadow-[0_24px_60px_rgba(0,0,0,0.44)] sm:p-7">
+        <section id="roadmap" className="mt-6 scroll-mt-28 rounded-xl border border-[var(--border-strong)] bg-[linear-gradient(180deg,rgba(141,99,255,0.08),transparent_16%),var(--surface-strong)] p-6 shadow-[0_24px_60px_rgba(0,0,0,0.44)] sm:p-7">
           <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">

@@ -1,15 +1,31 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { API_URL } from "@/lib/api";
 
 export default function AuthPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(true);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session) {
+        const existingName = String(
+          session.user.user_metadata?.display_name ?? "",
+        ).trim();
+        router.replace(existingName ? "/dashboard" : "/welcome");
+      }
+    })();
+  }, [router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,7 +54,21 @@ export default function AuthPage() {
       if (error) {
         setMessage(error.message);
       } else {
-        setMessage("Signed in successfully.");
+        const {
+          data: { session: freshSession },
+        } = await supabase.auth.getSession();
+        const existingName = String(
+          freshSession?.user.user_metadata?.display_name ?? "",
+        ).trim();
+        if (!freshSession) {
+          setMessage(
+            "Signed in successfully. Taking you to the next step...",
+          );
+          router.replace("/welcome");
+        } else {
+          setMessage("Signed in successfully. Taking you to the next step...");
+          router.replace(existingName ? "/dashboard" : "/welcome");
+        }
       }
     }
 
@@ -95,7 +125,7 @@ async function testProfileApi() {
     } else {
       setMessage("Profile API success: " + JSON.stringify(data));
     }
-  } catch (error) {
+  } catch {
     setMessage("Could not reach the backend.");
   } finally {
     setLoading(false);

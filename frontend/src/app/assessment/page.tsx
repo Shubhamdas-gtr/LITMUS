@@ -759,20 +759,9 @@ export default function AssessmentPage() {
     <main className="litmus-shell relative isolate overflow-hidden litmus-grid-lines">
       <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-4 py-4 sm:px-6 lg:px-8">
         <header className="flex items-center justify-between gap-4 py-3 sm:py-5">
-          <div className="inline-flex items-center gap-3">
-            <div className="litmus-brand-mark">
-              <span>L</span>
-            </div>
-
-            <div className="flex flex-col">
-              <span className="litmus-brand-wordmark text-sm font-semibold text-[var(--foreground)]">
-                LITMUS
-              </span>
-              <span className="litmus-brand-tagline text-[0.7rem] text-[var(--muted)]">
-                assessment
-              </span>
-            </div>
-          </div>
+          <p className="text-xs uppercase tracking-[0.34em] text-[var(--muted)]">
+            Assessment
+          </p>
 
           <div className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted)] shadow-[0_10px_24px_rgba(17,17,17,0.05)]">
             {getProgressLabel(step)}
