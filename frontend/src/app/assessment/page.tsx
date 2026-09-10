@@ -2,7 +2,7 @@
 
 ;
 import { supabase } from "@/lib/supabase";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getAssessmentQuestionSet,
@@ -452,6 +452,13 @@ export default function AssessmentPage() {
   const [assessmentAnswers, setAssessmentAnswers] = useState<
     Record<string, number>
   >({});
+  const [aiQuestions, setAiQuestions] = useState<AssessmentQuestion[] | null>(
+    null,
+  );
+  const [aiQuestionsLoading, setAiQuestionsLoading] = useState(false);
+  const [aiQuestionsAttemptedRole, setAiQuestionsAttemptedRole] = useState<
+    string | null
+  >(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   
@@ -496,7 +503,92 @@ export default function AssessmentPage() {
     selectedSkills.length > 0 &&
     selectedSkills.every((skill) => skillConfidence[skill.id]);
   const assessmentQuestionSet = getAssessmentQuestionSet(selectedRole?.id);
-  const assessmentQuestions = assessmentQuestionSet.questions;
+  const assessmentQuestions = aiQuestions ?? assessmentQuestionSet.questions;
+
+  const fetchAiQuestions = useCallback(
+    async (roleId: string, roleTitle: string, skillLabels: string[]) => {
+      setAiQuestionsLoading(true);
+      setAiQuestionsAttemptedRole(roleId);
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const response = await fetch(
+          `${API_URL}/api/profile/assessment/questions`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              target_role: roleTitle,
+              skills: skillLabels,
+            }),
+          },
+        );
+
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.questions)) return;
+
+        const valid = data.questions.filter(
+          (item: unknown): item is AssessmentQuestion =>
+            typeof item === "object" &&
+            item !== null &&
+            typeof (item as AssessmentQuestion).id === "string" &&
+            typeof (item as AssessmentQuestion).question === "string" &&
+            Array.isArray((item as AssessmentQuestion).options) &&
+            (item as AssessmentQuestion).options.length === 4 &&
+            typeof (item as AssessmentQuestion).skill === "string",
+        );
+        if (valid.length === 0) return;
+
+        setAiQuestions(valid);
+        setAssessmentQuestionIndex(0);
+        setAssessmentAnswers({});
+      } catch {
+        // AI set is best-effort; the static bank below stays as fallback.
+      } finally {
+        setAiQuestionsLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    // One AI attempt per role per wizard run; failures keep the static bank.
+    // Deferred to a microtask so the effect itself stays side-effect free.
+    if (step !== 7 || !targetRole || !selectedRole) return;
+    if (aiQuestionsLoading) return;
+    if (aiQuestionsAttemptedRole === targetRole) return;
+    const roleId = targetRole;
+    const roleTitle = selectedRole.title;
+    const skillLabels = selectedSkills.map((skill) => skill.label);
+    const timer = window.setTimeout(() => {
+      void fetchAiQuestions(roleId, roleTitle, skillLabels);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [
+    step,
+    targetRole,
+    selectedRole,
+    selectedSkills,
+    aiQuestionsAttemptedRole,
+    aiQuestionsLoading,
+    fetchAiQuestions,
+  ]);
+
+  const refreshAiQuestions = () => {
+    if (!targetRole || !selectedRole || aiQuestionsLoading) return;
+    setAiQuestions(null);
+    void fetchAiQuestions(
+      targetRole,
+      selectedRole.title,
+      selectedSkills.map((skill) => skill.label),
+    );
+  };
   const currentAssessmentQuestion =
     assessmentQuestions[assessmentQuestionIndex] ?? assessmentQuestions[0];
   const currentAssessmentAnswer =
@@ -1829,8 +1921,24 @@ export default function AssessmentPage() {
                     Question {assessmentQuestionIndex + 1} of {assessmentQuestions.length}
                   </div>
 
-                  <div className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
-                    {answeredAssessmentCount} answered
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="font-ui text-xs uppercase tracking-[0.28em] text-[var(--muted)]">
+                      {aiQuestionsLoading
+                        ? "Preparing fresh questions…"
+                        : aiQuestions
+                          ? "Fresh set for your role"
+                          : `${answeredAssessmentCount} answered`}
+                    </div>
+
+                    {!aiQuestionsLoading ? (
+                      <button
+                        type="button"
+                        onClick={refreshAiQuestions}
+                        className="rounded-full border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-[var(--muted)] transition duration-200 hover:border-[var(--border-strong)] hover:text-[var(--foreground)]"
+                      >
+                        New set
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 

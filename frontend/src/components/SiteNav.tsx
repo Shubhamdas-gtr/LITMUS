@@ -71,7 +71,7 @@ export default function SiteNav() {
 
   return (
     <div className="sticky top-0 z-50">
-      <div className="border-b border-[var(--border)] bg-[rgba(5,6,10,0.92)] backdrop-blur">
+      <div className="site-nav-blur border-b border-[var(--border)] bg-[rgba(5,6,10,0.92)] backdrop-blur">
         <p className="mx-auto w-full max-w-7xl px-4 py-1.5 text-center text-[0.62rem] uppercase tracking-[0.28em] text-[var(--muted)] sm:px-6 lg:px-8">
           <span className="text-[var(--accent)]">GitHub sync is live</span>
           <span className="mx-2 text-[var(--border)]">·</span>
@@ -79,7 +79,7 @@ export default function SiteNav() {
         </p>
       </div>
 
-      <header className="border-b border-[var(--border)] bg-[rgba(5,6,10,0.86)] backdrop-blur">
+      <header className="site-nav-blur border-b border-[var(--border)] bg-[rgba(5,6,10,0.86)] backdrop-blur">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
           <Link href="/" className="inline-flex items-center gap-3" aria-label="LITMUS home">
             <Image

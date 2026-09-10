@@ -336,3 +336,100 @@ Current skills:
         raise RuntimeError(
             "Career Roadmap Agent returned invalid JSON."
         ) from exc
+
+
+async def generate_assessment_questions(
+    target_role: str,
+    skills: list[str],
+    count: int = 5,
+) -> list[dict]:
+    """Generate fresh situational assessment questions for a target role.
+
+    Returns a list of {question, options[4], skill} dicts. Raises RuntimeError
+    when the model response is unusable after one retry; callers fall back to
+    the static bank.
+    """
+    role = (target_role or "General").strip() or "General"
+    skill_list = [s for s in (skills or []) if isinstance(s, str) and s.strip()][:20]
+    count = max(1, min(count, 8))
+
+    system_prompt = """
+You write situational self-assessment questions for LITMUS, a career
+intelligence platform for college students.
+
+Return ONLY valid JSON with this exact shape:
+
+{
+  "questions": [
+    {"question": "", "options": ["", "", "", ""], "skill": ""}
+  ]
+}
+
+Rules:
+- Write exactly the requested number of questions.
+- Each question is a realistic work scenario for the target role.
+- Exactly 4 options per question, each a plausible behavior or choice.
+- Vary which option position holds the strongest behavior. NEVER make the
+  first option the strongest every time; distribute strength across positions.
+- "skill" is a short canonical skill label the question probes.
+- Ground follow-ups in the provided current skills when relevant.
+- Plain professional tone. No explanations outside the JSON.
+""".strip()
+
+    user_prompt = json.dumps(
+        {
+            "target_role": role,
+            "current_skills": skill_list,
+            "count": count,
+        },
+        indent=2,
+        ensure_ascii=True,
+    )
+
+    last_error: Exception | None = None
+    for _ in range(2):
+        try:
+            result = await ask_ai(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            )
+            cleaned = result.strip()
+            if cleaned.startswith("```"):
+                cleaned = cleaned.removeprefix("```json")
+                cleaned = cleaned.removeprefix("```")
+                cleaned = cleaned.removesuffix("```")
+                cleaned = cleaned.strip()
+            parsed = json.loads(cleaned)
+            raw = parsed.get("questions") if isinstance(parsed, dict) else None
+            if not isinstance(raw, list):
+                raise RuntimeError("Question Agent returned invalid JSON.")
+
+            questions: list[dict] = []
+            for item in raw[:count]:
+                if not isinstance(item, dict):
+                    continue
+                question = str(item.get("question") or "").strip()
+                skill = str(item.get("skill") or "").strip()
+                options = item.get("options")
+                if not question or not skill:
+                    continue
+                if not isinstance(options, list) or len(options) != 4:
+                    continue
+                cleaned_options = [
+                    str(option).strip() for option in options
+                ]
+                if any(not option for option in cleaned_options):
+                    continue
+                questions.append(
+                    {
+                        "question": question,
+                        "options": cleaned_options,
+                        "skill": skill,
+                    }
+                )
+            if not questions:
+                raise RuntimeError("Question Agent returned no usable questions.")
+            return questions
+        except Exception as exc:  # noqa: BLE001 — retried once, then raised
+            last_error = exc
+    raise RuntimeError("Question Agent returned invalid JSON.") from last_error

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { API_URL } from "@/lib/api";
 
@@ -112,9 +112,10 @@ type LeadDraft = {
 type LeadRecord = {
   id: string;
   profile_id: string;
-  github_profile_id: string;
+  github_profile_id: string | null;
   detected_event_id: string | null;
   dedup_key: string;
+  source: "github" | "resume" | "milestone" | "manual" | string;
   title: string;
   angle: string;
   relevant_skills: string[];
@@ -178,6 +179,57 @@ const githubSyncStateLabel: Record<GithubSyncState, string> = {
   rate_limited: "Rate limited",
 };
 
+const leadSourceLabel: Record<string, string> = {
+  github: "GitHub push",
+  resume: "Resume project",
+  milestone: "Milestone",
+  manual: "Your note",
+};
+
+const LeadDraftEditor = memo(function LeadDraftEditor({
+  initialBody,
+  saving,
+  onSave,
+  onCancel,
+}: {
+  initialBody: string;
+  saving: boolean;
+  onSave: (body: string) => void;
+  onCancel: () => void;
+}) {
+  // Local state keeps every keystroke inside this small component instead of
+  // re-rendering the whole dashboard page on each change (mobile perf).
+  const [body, setBody] = useState(initialBody);
+
+  return (
+    <div className="space-y-3">
+      <textarea
+        value={body}
+        onChange={(event) => setBody(event.target.value)}
+        rows={8}
+        className="w-full rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.9)] px-4 py-3 text-sm leading-6 text-[var(--foreground)] outline-none transition focus:border-[var(--border-strong)]"
+      />
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onSave(body)}
+          disabled={saving}
+          className="inline-flex items-center justify-center rounded-full border border-[var(--accent)] bg-[var(--accent)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] disabled:cursor-wait disabled:opacity-60"
+        >
+          Save draft
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-[rgba(8,10,16,0.78)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export default function DashboardPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -213,6 +265,9 @@ export default function DashboardPage() {
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
   const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
   const [editingDraftBody, setEditingDraftBody] = useState("");
+  const [manualNote, setManualNote] = useState("");
+  const [manualNoteLoading, setManualNoteLoading] = useState(false);
+  const [manualNoteError, setManualNoteError] = useState("");
 
   const detectGithub = useCallback(async () => {
     // Canonical provider field in @supabase/supabase-js 2.112.4 is `provider`
@@ -466,9 +521,54 @@ export default function DashboardPage() {
     }
   };
 
+  const handleManualLead = async () => {
+    try {
+      setManualNoteLoading(true);
+      setManualNoteError("");
+      setGeneratedLeadsMessage("");
+
+      const text = manualNote.trim();
+      if (text.length < 10) {
+        setManualNoteError("Please describe your work in at least 10 characters.");
+        return;
+      }
+
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setGeneratedLeadsError("Please sign in to create leads.");
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/api/profile/leads/manual`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail ?? "Could not draft a lead from that note.");
+      }
+
+      setManualNote("");
+      await loadGeneratedLeads();
+      setGeneratedLeadsMessage("Draft created from your note.");
+    } catch (err) {
+      setManualNoteError(
+        err instanceof Error ? err.message : "Could not draft a lead from that note.",
+      );
+    } finally {
+      setManualNoteLoading(false);
+    }
+  };
+
   const handleLeadReview = async (
     lead: LeadRecord,
     action: "approve" | "dismiss" | "converted" | "edit",
+    draftBody?: string,
   ) => {
     try {
       setLeadActionBusyId(lead.id);
@@ -492,7 +592,7 @@ export default function DashboardPage() {
             action === "edit"
               ? {
                   action,
-                  draft_body: editingDraftBody,
+                  draft_body: draftBody ?? editingDraftBody,
                 }
               : {
                   action,
@@ -892,9 +992,12 @@ export default function DashboardPage() {
     return () => subscription.unsubscribe();
   }, [detectGithub]);
 
-  const completedRoadmapCount =
-    roadmap?.roadmap?.filter((item) => completedSkills.has(item.skill)).length ??
-    0;
+  const completedRoadmapCount = useMemo(
+    () =>
+      roadmap?.roadmap?.filter((item) => completedSkills.has(item.skill))
+        .length ?? 0,
+    [roadmap, completedSkills],
+  );
   const availableResume = Boolean(profile?.resume_path);
   const generatedLeadCount = generatedLeads.length;
 
@@ -1232,9 +1335,9 @@ export default function DashboardPage() {
                 GitHub changes turned into reviewable opportunities
               </h2>
               <p className="max-w-2xl text-sm leading-6 text-[var(--muted)] sm:text-base">
-                LITMUS watches for meaningful repo pushes, turns them into
-                conservative leads, and drafts a manual LinkedIn post you can
-                copy, edit, approve, or delete.
+                LITMUS turns repo pushes, resume projects, finished roadmap
+                skills, and your own notes into conservative leads, and drafts
+                a manual LinkedIn post you can copy, edit, approve, or delete.
               </p>
             </div>
 
@@ -1243,19 +1346,23 @@ export default function DashboardPage() {
                 {generatedLeadCount} lead{generatedLeadCount === 1 ? "" : "s"}
               </div>
 
-              {githubConnected ? (
-                <button
-                  type="button"
-                  onClick={handleGenerateLeads}
-                  disabled={leadGenerateLoading}
-                  className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-xs uppercase tracking-[0.24em] transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
-                    leadGenerateLoading
-                      ? "cursor-wait border border-[var(--border)] bg-[rgba(8,10,16,0.78)] text-[var(--muted)] opacity-80"
-                      : "border border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)] shadow-[0_12px_26px_rgba(141,220,16,0.18)] hover:-translate-y-0.5 hover:bg-[var(--accent-strong)]"
-                  }`}
-                >
-                  {leadGenerateLoading ? "Generating..." : "Generate leads"}
-                </button>
+              <button
+                type="button"
+                onClick={handleGenerateLeads}
+                disabled={leadGenerateLoading}
+                className={`inline-flex items-center justify-center rounded-full px-4 py-2 text-xs uppercase tracking-[0.24em] transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
+                  leadGenerateLoading
+                    ? "cursor-wait border border-[var(--border)] bg-[rgba(8,10,16,0.78)] text-[var(--muted)] opacity-80"
+                    : "border border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)] shadow-[0_12px_26px_rgba(141,220,16,0.18)] hover:-translate-y-0.5 hover:bg-[var(--accent-strong)]"
+                }`}
+              >
+                {leadGenerateLoading ? "Generating..." : "Generate leads"}
+              </button>
+              {!githubConnected ? (
+                <p className="max-w-55 text-xs leading-5 text-[var(--muted)] md:text-right">
+                  No GitHub needed — resume projects, finished skills, and your
+                  notes work on their own.
+                </p>
               ) : null}
             </div>
           </div>
@@ -1283,9 +1390,22 @@ export default function DashboardPage() {
                   0,
                   Math.min(100, Math.round((lead.confidence ?? 0) * 100)),
                 );
-                const sourceRepoName = lead.source_repository?.name ?? "Unknown repository";
+                const leadSource = lead.source ?? "github";
+                const leadSourceText = leadSourceLabel[leadSource] ?? "GitHub push";
+                const hasRepoSource = Boolean(lead.source_repository?.name ?? lead.source_repository?.url);
+                const sourceRepoName = lead.source_repository?.name ?? (
+                  leadSource === "resume"
+                    ? "Resume project"
+                    : leadSource === "milestone"
+                      ? "Roadmap milestone"
+                      : leadSource === "manual"
+                        ? "Your note"
+                        : "GitHub activity"
+                );
                 const sourceRepoUrl = lead.source_repository?.url;
-                const sourceEventType = lead.source_event?.event_type ?? "repo_pushed";
+                const sourceEventType = lead.source_event?.event_type ?? (
+                  hasRepoSource ? "repo_pushed" : leadSource
+                );
                 const generatedTime = lead.generated_at
                   ? new Date(lead.generated_at).toLocaleString(undefined, {
                       dateStyle: "medium",
@@ -1300,13 +1420,16 @@ export default function DashboardPage() {
                 return (
                   <article
                     key={lead.id}
-                    className="rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.72)] p-4 sm:p-5"
+                    className="litmus-cv-auto rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.72)] p-4 sm:p-5"
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="space-y-3">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[0.62rem] uppercase tracking-[0.24em] text-[var(--muted)]">
                             Lead
+                          </span>
+                          <span className="rounded-full border border-[var(--border)] bg-[rgba(8,10,16,0.82)] px-2.5 py-1 text-[0.62rem] uppercase tracking-[0.18em] text-[var(--muted-strong)]">
+                            {leadSourceText}
                           </span>
                           <span className="rounded-full border border-[rgba(141,220,16,0.2)] bg-[rgba(141,220,16,0.08)] px-2.5 py-1 text-[0.62rem] uppercase tracking-[0.18em] text-[var(--accent)]">
                             {lead.status}
@@ -1363,7 +1486,7 @@ export default function DashboardPage() {
                     <div className="mt-4 grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
                       <div className="rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.66)] p-4">
                         <p className="text-[0.62rem] uppercase tracking-[0.22em] text-[var(--muted)]">
-                          Source repository
+                          {hasRepoSource ? "Source repository" : "Source"}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold tracking-[-0.03em] text-[var(--foreground)]">
@@ -1414,33 +1537,13 @@ export default function DashboardPage() {
                           ) : null}
 
                           {isEditing ? (
-                            <div className="space-y-3">
-                              <textarea
-                                value={editingDraftBody}
-                                onChange={(event) =>
-                                  setEditingDraftBody(event.target.value)
-                                }
-                                rows={8}
-                                className="w-full rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.9)] px-4 py-3 text-sm leading-6 text-[var(--foreground)] outline-none transition focus:border-[var(--border-strong)]"
-                              />
-                              <div className="flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleLeadReview(lead, "edit")}
-                                  disabled={leadActionBusyId === lead.id}
-                                  className="inline-flex items-center justify-center rounded-full border border-[var(--accent)] bg-[var(--accent)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] disabled:cursor-wait disabled:opacity-60"
-                                >
-                                  Save draft
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={cancelLeadEdit}
-                                  className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-[rgba(8,10,16,0.78)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--muted)] transition duration-200 hover:-translate-y-0.5 hover:border-[var(--border-strong)]"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
+                            <LeadDraftEditor
+                              key={lead.id}
+                              initialBody={lead.draft?.body ?? ""}
+                              saving={leadActionBusyId === lead.id}
+                              onSave={(body) => handleLeadReview(lead, "edit", body)}
+                              onCancel={cancelLeadEdit}
+                            />
                           ) : (
                             <p className="text-sm leading-6 text-[var(--muted)]">
                               {draftBody || "No draft body is available yet."}
@@ -1523,25 +1626,55 @@ export default function DashboardPage() {
           ) : (
             <div className="mt-6 rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.66)] p-5">
               <p className="text-sm leading-6 text-[var(--muted)]">
-                No generated leads yet. Sync GitHub to detect repo pushes, then
-                ask LITMUS to turn them into reviewable drafts.
+                No generated leads yet. Generate to turn resume projects,
+                finished roadmap skills, and your notes into reviewable drafts
+                {githubConnected
+                  ? " — plus any fresh repo pushes since your last sync."
+                  : ". Connect GitHub anytime to add repo pushes as a source."}
               </p>
-              {githubConnected ? (
-                <button
-                  type="button"
-                  onClick={handleGenerateLeads}
-                  disabled={leadGenerateLoading}
-                  className={`mt-4 inline-flex items-center justify-center rounded-full px-4 py-2 text-xs uppercase tracking-[0.24em] transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
-                    leadGenerateLoading
-                      ? "cursor-wait border border-[var(--border)] bg-[rgba(8,10,16,0.78)] text-[var(--muted)] opacity-80"
-                      : "border border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)] shadow-[0_12px_26px_rgba(141,220,16,0.18)] hover:-translate-y-0.5 hover:bg-[var(--accent-strong)]"
-                  }`}
-                >
-                  {leadGenerateLoading ? "Generating..." : "Generate leads"}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                onClick={handleGenerateLeads}
+                disabled={leadGenerateLoading}
+                className={`mt-4 inline-flex items-center justify-center rounded-full px-4 py-2 text-xs uppercase tracking-[0.24em] transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] ${
+                  leadGenerateLoading
+                    ? "cursor-wait border border-[var(--border)] bg-[rgba(8,10,16,0.78)] text-[var(--muted)] opacity-80"
+                    : "border border-[var(--accent)] bg-[var(--accent)] text-[var(--ink)] shadow-[0_12px_26px_rgba(141,220,16,0.18)] hover:-translate-y-0.5 hover:bg-[var(--accent-strong)]"
+                }`}
+              >
+                {leadGenerateLoading ? "Generating..." : "Generate leads"}
+              </button>
             </div>
           )}
+
+          <div className="mt-6 rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.66)] p-5">
+            <p className="text-[0.62rem] uppercase tracking-[0.22em] text-[var(--muted)]">
+              Worked on something? Tell LITMUS
+            </p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+              Describe it in a few sentences — no GitHub or resume needed — and
+              get a manual draft back.
+            </p>
+            <textarea
+              value={manualNote}
+              onChange={(event) => setManualNote(event.target.value)}
+              rows={3}
+              maxLength={2000}
+              placeholder="e.g. Shipped form validation for the checkout flow and wrote tests…"
+              className="mt-3 w-full rounded-lg border border-[var(--border)] bg-[rgba(8,10,16,0.9)] px-4 py-3 text-sm leading-6 text-[var(--foreground)] outline-none transition placeholder:text-[var(--muted)] focus:border-[var(--border-strong)]"
+            />
+            {manualNoteError ? (
+              <p className="mt-2 text-sm text-[var(--danger)]">{manualNoteError}</p>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleManualLead}
+              disabled={manualNoteLoading || manualNote.trim().length < 10}
+              className="mt-3 inline-flex items-center justify-center rounded-full border border-[var(--accent)] bg-[var(--accent)] px-4 py-2 text-xs uppercase tracking-[0.24em] text-[var(--ink)] transition duration-200 hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {manualNoteLoading ? "Drafting..." : "Draft from my note"}
+            </button>
+          </div>
         </section>
 
         <section id="profile" className="grid scroll-mt-28 gap-6 py-6 lg:grid-cols-[1.12fr_0.88fr] lg:items-start lg:py-8">
@@ -2085,7 +2218,7 @@ export default function DashboardPage() {
                         toggleRoadmapItem(index);
                       }
                     }}
-                    className="relative"
+                    className="litmus-cv-auto relative"
                   >
                     <div className="absolute -left-[2.25rem] top-4 flex items-center justify-center">
                       <div className="relative z-10 flex h-[1.35rem] w-[1.35rem] items-center justify-center rounded-full border bg-[var(--background)] text-[0.55rem] font-bold tracking-[-0.06em]">

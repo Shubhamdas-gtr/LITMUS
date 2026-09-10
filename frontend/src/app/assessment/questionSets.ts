@@ -2,7 +2,8 @@ export type AssessmentQuestion = {
   id: string;
   question: string;
   options: string[];
-  correctAnswer: number;
+  /** Optional: static bank marks the strongest behavior; AI sets omit it. */
+  correctAnswer?: number;
   skill: string;
 };
 

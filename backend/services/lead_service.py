@@ -3,10 +3,16 @@
 The lead agent turns grounded GitHub change events into conservative, reviewable
 opportunities. The draft agent turns a generated lead into a manual LinkedIn
 post draft without any publishing integration.
+
+Phase D3 adds GitHub-independent sources (resume projects, roadmap milestones,
+manual entries) so users without a connected GitHub account still get
+reviewable leads. These reuse the same draft agent and persistence shape with
+detected_event_id/github_profile_id left null.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from typing import Any
 
@@ -14,8 +20,11 @@ from services.ai_service import ask_ai
 
 LEAD_PROMPT_VERSION = "d2-v2"
 DRAFT_PROMPT_VERSION = "d2-v2"
+NONGITHUB_PROMPT_VERSION = "d3-v1"
 MIN_LEAD_CONFIDENCE = 0.45
 FALLBACK_LEAD_CONFIDENCE = 0.45
+MIN_RESUME_LEAD_CONFIDENCE = 0.50
+MILESTONE_LEAD_CONFIDENCE = 0.55
 
 
 def _strip_json_fences(raw: str) -> str:
@@ -317,4 +326,259 @@ Rules:
         "subject": subject,
         "body": body,
         "citations": citations,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase D3 — GitHub-independent lead sources.
+#
+# Each generator returns lead dicts shaped like the GitHub path plus:
+#   source: "resume" | "milestone" | "manual"
+#   dedup_key: namespaced ("resume:{hash}" / "milestone:{skill}" / ...)
+# Callers persist with detected_event_id=None and github_profile_id=None.
+# ---------------------------------------------------------------------------
+
+
+def _slug_hash(text: str) -> str:
+    return hashlib.sha1(text.strip().lower().encode("utf-8")).hexdigest()[:12]
+
+
+def _ground_skills(candidates: Any, allowed_skill_set: set[str]) -> list[str]:
+    grounded: list[str] = []
+    if isinstance(candidates, list):
+        for value in candidates:
+            if isinstance(value, str) and value.strip() and value.strip() in allowed_skill_set:
+                grounded.append(value.strip())
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for skill in grounded:
+        if skill not in seen:
+            seen.add(skill)
+            ordered.append(skill)
+    return ordered[:5]
+
+
+async def generate_resume_project_leads(
+    context: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Turn resume projects/experience into reviewable post drafts (max 3)."""
+    resume = context.get("resume_analysis") or {}
+    projects = resume.get("projects") or []
+    experience = resume.get("experience") or []
+    items: list[dict[str, Any]] = []
+    for entry in (projects if isinstance(projects, list) else []):
+        name = entry.get("name") if isinstance(entry, dict) else None
+        description = entry.get("description") if isinstance(entry, dict) else None
+        if name or description:
+            items.append({"kind": "project", "name": str(name or "").strip(), "description": str(description or "").strip()})
+    for entry in (experience if isinstance(experience, list) else []):
+        title = entry.get("title") if isinstance(entry, dict) else None
+        company = entry.get("company") if isinstance(entry, dict) else None
+        description = entry.get("description") if isinstance(entry, dict) else None
+        label = " ".join(part for part in (title, f"at {company}" if company else None) if part).strip()
+        if label or description:
+            items.append({"kind": "experience", "name": label, "description": str(description or "").strip()})
+    if not items:
+        return []
+
+    allowed_skill_set: set[str] = set()
+    for skill in context.get("allowed_skills", []) or []:
+        if isinstance(skill, str) and skill.strip():
+            allowed_skill_set.add(skill.strip())
+
+    system_prompt = """
+You are the Resume Lead Agent for LITMUS.
+
+Pick up to 3 resume items most worth turning into a professional LinkedIn post
+draft for the user to manually review and post themselves.
+Return ONLY valid JSON with this exact shape:
+
+{
+  "leads": [
+    {"key": "", "title": "", "angle": "", "relevant_skills": [], "confidence": 0.0}
+  ]
+}
+
+Rules:
+- Use only the provided resume items and profile context.
+- Do not invent facts, metrics, employers, or outcomes.
+- "key" must be the item name/label restated briefly (used for dedup).
+- relevant_skills must only include skills from the allowed skills list.
+- confidence must be a number between 0 and 1.
+- Keep titles concise and angles short, concrete, grounded.
+- If nothing is post-worthy, return {"leads": []}.
+- Do not mention LinkedIn automation or publishing.
+""".strip()
+
+    user_prompt = json.dumps(
+        {
+            "prompt_version": NONGITHUB_PROMPT_VERSION,
+            "target_role": context.get("target_role"),
+            "profile_context": context.get("profile_context") or {},
+            "resume_items": items[:12],
+            "allowed_skills": sorted(allowed_skill_set),
+        },
+        indent=2,
+        ensure_ascii=True,
+    )
+
+    try:
+        result = await _ask_ai_with_retry(system_prompt=system_prompt, user_prompt=user_prompt)
+        parsed = _parse_json_object(result, "Resume Lead Agent returned invalid JSON.")
+        raw_leads = parsed.get("leads") if isinstance(parsed.get("leads"), list) else []
+    except Exception:
+        raw_leads = []
+
+    leads: list[dict[str, Any]] = []
+    for raw in raw_leads:
+        if not isinstance(raw, dict):
+            continue
+        title = str(raw.get("title") or "").strip()
+        angle = str(raw.get("angle") or "").strip()
+        key = str(raw.get("key") or title).strip()
+        try:
+            confidence = float(raw.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        if not title or not angle or not key or confidence < MIN_RESUME_LEAD_CONFIDENCE:
+            continue
+        leads.append(
+            {
+                "source": "resume",
+                "dedup_key": f"resume:{_slug_hash(key)}",
+                "title": title,
+                "angle": angle,
+                "relevant_skills": _ground_skills(raw.get("relevant_skills"), allowed_skill_set),
+                "confidence": confidence,
+            }
+        )
+        if len(leads) >= 3:
+            break
+
+    if leads:
+        return leads
+
+    # Deterministic fallback: first three items, honestly framed.
+    for item in items[:3]:
+        label = item["name"] or item["description"][:60]
+        if not label:
+            continue
+        description = item["description"]
+        leads.append(
+            {
+                "source": "resume",
+                "dedup_key": f"resume:{_slug_hash(label)}",
+                "title": f"From my work: {label[:80]}",
+                "angle": (
+                    f"Turn this resume {item['kind']} into a post: {description[:160]}."
+                    if description
+                    else f"Turn this resume {item['kind']} ({label[:80]}) into a post."
+                ),
+                "relevant_skills": [],
+                "confidence": MIN_RESUME_LEAD_CONFIDENCE,
+            }
+        )
+    return leads
+
+
+def build_milestone_lead(
+    skill: str,
+    roadmap_item: dict[str, Any] | None,
+    profile_context: dict[str, Any],
+    allowed_skill_set: set[str],
+) -> dict[str, Any] | None:
+    """Deterministic announcement-style lead for a completed roadmap skill."""
+    skill = (skill or "").strip()
+    if not skill:
+        return None
+    project = ""
+    if isinstance(roadmap_item, dict):
+        project = str(roadmap_item.get("project") or "").strip()
+    angle = (
+        f"You completed {skill} — announce it with the project as proof"
+        + (f": {project[:140]}." if project else ".")
+    )
+    skills = [skill] if skill in allowed_skill_set else []
+    return {
+        "source": "milestone",
+        "dedup_key": f"milestone:{_slug_hash(skill)}",
+        "title": f"{skill} complete — share the proof",
+        "angle": angle,
+        "relevant_skills": skills,
+        "confidence": MILESTONE_LEAD_CONFIDENCE,
+    }
+
+
+async def generate_manual_lead(
+    text: str,
+    context: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Turn a user-typed work note into a reviewable lead."""
+    text = (text or "").strip()
+    if len(text) < 10 or len(text) > 2000:
+        return None
+
+    allowed_skill_set: set[str] = set()
+    for skill in context.get("allowed_skills", []) or []:
+        if isinstance(skill, str) and skill.strip():
+            allowed_skill_set.add(skill.strip())
+
+    system_prompt = """
+You are the Manual Lead Agent for LITMUS.
+
+Turn the user's work note into one conservative, reviewable LinkedIn post lead.
+Return ONLY valid JSON with this exact shape:
+
+{"title": "", "angle": "", "relevant_skills": [], "confidence": 0.0}
+
+Rules:
+- Use only the provided note and profile context.
+- Do not invent facts, metrics, employers, or outcomes beyond the note.
+- relevant_skills must only include skills from the allowed skills list.
+- confidence must be a number between 0 and 1.
+- Keep the title concise and the angle short, concrete, grounded.
+- Do not mention LinkedIn automation or publishing.
+""".strip()
+
+    user_prompt = json.dumps(
+        {
+            "prompt_version": NONGITHUB_PROMPT_VERSION,
+            "target_role": context.get("target_role"),
+            "profile_context": context.get("profile_context") or {},
+            "note": text[:2000],
+            "allowed_skills": sorted(allowed_skill_set),
+        },
+        indent=2,
+        ensure_ascii=True,
+    )
+
+    try:
+        result = await _ask_ai_with_retry(system_prompt=system_prompt, user_prompt=user_prompt)
+        parsed = _parse_json_object(result, "Manual Lead Agent returned invalid JSON.")
+        title = str(parsed.get("title") or "").strip()
+        angle = str(parsed.get("angle") or "").strip()
+        try:
+            confidence = float(parsed.get("confidence") or 0.0)
+        except (TypeError, ValueError):
+            confidence = 0.0
+        if title and angle and confidence >= MIN_LEAD_CONFIDENCE:
+            return {
+                "source": "manual",
+                "dedup_key": f"manual:{_slug_hash(text)}",
+                "title": title,
+                "angle": angle,
+                "relevant_skills": _ground_skills(parsed.get("relevant_skills"), allowed_skill_set),
+                "confidence": confidence,
+            }
+    except Exception:
+        pass
+
+    first_line = text.splitlines()[0][:140] if text.splitlines() else text[:140]
+    return {
+        "source": "manual",
+        "dedup_key": f"manual:{_slug_hash(text)}",
+        "title": "Work note worth sharing",
+        "angle": f"Turn this note into a post: {first_line}.",
+        "relevant_skills": [],
+        "confidence": FALLBACK_LEAD_CONFIDENCE,
     }

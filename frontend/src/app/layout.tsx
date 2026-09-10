@@ -45,14 +45,6 @@ const bodyFont = localFont({
   display: "swap",
 });
 
-const compactFont = localFont({
-  src: "./fonts/GulamsCondensedDemoExtrabold-8OBrD.otf",
-  variable: "--font-compact",
-  weight: "800",
-  style: "normal",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
   title: {
     default: "LITMUS | Career intelligence for college students",
@@ -70,7 +62,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html
       lang="en"
-      className={`${displayFont.variable} ${bodyFont.variable} ${compactFont.variable} h-full antialiased`}
+      className={`${displayFont.variable} ${bodyFont.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[var(--background)] text-[var(--foreground)]">
         <SiteNav />

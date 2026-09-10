@@ -137,11 +137,6 @@ a {
   line-height: 1.05;
 }
 
-.font-compact {
-  font-family: var(--font-body), ui-sans-serif, system-ui,
-    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-}
-
 h1,
 h2,
 h3,
@@ -373,6 +368,38 @@ h4 {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Mobile calm-down: drop GPU-hostile blur/animation layers on coarse
+   pointers; desktop visuals are untouched. */
+@media (pointer: coarse) {
+  .litmus-shell::before,
+  .litmus-core::before,
+  .litmus-core::after,
+  .litmus-scan-line::after {
+    animation: none !important;
+  }
+
+  .litmus-shell::before {
+    opacity: 0.45;
+  }
+
+  body::before {
+    filter: none;
+    opacity: 0.6;
+  }
+
+  .site-nav-blur {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: rgba(5, 6, 10, 0.97) !important;
+  }
+}
+
+/* Skip off-screen rendering work for long dashboard lists. */
+.litmus-cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 @keyframes auraFloat {

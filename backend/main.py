@@ -17,15 +17,20 @@ from fastapi import UploadFile, File
 from services.ai_service import (
     analyze_resume,
     analyze_skill_gap,
+    generate_assessment_questions,
     generate_career_roadmap,
 )
 from services.resume_parser import extract_resume_text
 from services.lead_service import (
     DRAFT_PROMPT_VERSION,
+    NONGITHUB_PROMPT_VERSION,
+    build_milestone_lead,
     fallback_lead_candidate,
     fallback_linkedin_draft,
     generate_lead_candidate,
     generate_linkedin_draft,
+    generate_manual_lead,
+    generate_resume_project_leads,
 )
 from services.github_service import (
     GitHubAPIError,
@@ -107,6 +112,12 @@ class LeadReviewPayload(BaseModel):
     action: Literal["approve", "dismiss", "converted", "edit", "delete"]
     draft_body: str | None = None
 
+
+class AssessmentQuestionsPayload(BaseModel):
+    target_role: str = ""
+    skills: list[str] = []
+
+
 app = FastAPI()
 
 
@@ -171,6 +182,53 @@ def root():
     return {"message": "LITMUS API is running"}
 
 security = HTTPBearer()
+
+
+@app.post("/api/profile/assessment/questions")
+async def get_assessment_questions(
+    payload: AssessmentQuestionsPayload,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Generate a fresh set of situational assessment questions.
+
+    AI-backed with strict shape validation. Failures return 502 so the
+    frontend falls back to its static bank without blocking the wizard.
+    """
+    user = get_user_from_token(credentials.credentials)
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="User not authenticated",
+        )
+
+    role = (payload.target_role or "").strip() or "General"
+    slug = "".join(
+        character.lower() if character.isalnum() else "-"
+        for character in role
+    ).strip("-") or "general"
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+
+    try:
+        questions = await generate_assessment_questions(role, payload.skills or [])
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not generate questions: {str(error)}",
+        )
+
+    return {
+        "questions": [
+            {
+                "id": f"ai-{slug[:32]}-{index + 1}",
+                "question": item["question"],
+                "options": item["options"],
+                "skill": item["skill"],
+            }
+            for index, item in enumerate(questions)
+        ],
+    }
 
 
 @app.post("/api/profile")
@@ -1257,6 +1315,44 @@ def _load_latest_roadmap(profile_id: str) -> dict | None:
     return response.data[0] if response.data else None
 
 
+def _load_latest_resume(profile_id: str) -> dict | None:
+    try:
+        response = (
+            supabase
+            .table("resume_analyses")
+            .select("*")
+            .eq("profile_id", profile_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+    except Exception:
+        return None
+
+    return response.data[0] if response.data else None
+
+
+def _load_completed_roadmap_skills(profile_id: str) -> list[str]:
+    try:
+        response = (
+            supabase
+            .table("roadmap_progress")
+            .select("skill")
+            .eq("profile_id", profile_id)
+            .eq("completed", True)
+            .execute()
+        )
+    except Exception:
+        return []
+
+    skills: list[str] = []
+    for row in response.data or []:
+        skill = (row.get("skill") or "").strip()
+        if skill and skill not in skills:
+            skills.append(skill)
+    return skills
+
+
 def _load_github_profile_context(github_profile_id: str) -> dict | None:
     try:
         response = (
@@ -1607,6 +1703,164 @@ async def _generate_and_store_leads_for_events(
     return generated
 
 
+def _draft_context_for_nongithub(
+    profile: dict,
+    skill_gap: dict | None,
+    roadmap: dict | None,
+    allowed_skills: list[str],
+) -> dict:
+    """Minimal context the draft agent needs (no repository/event)."""
+    return {
+        "target_role": profile.get("target_role"),
+        "profile_context": {
+            "career_goal": profile.get("career_goal"),
+            "target_role": profile.get("target_role"),
+        },
+        "detected_event": {},
+        "repository": {},
+        "skill_gap": skill_gap or {},
+        "roadmap": roadmap or {},
+        "allowed_skills": allowed_skills,
+    }
+
+
+async def _store_nongithub_lead(
+    profile_id: str,
+    lead: dict,
+    draft_context: dict,
+) -> dict | None:
+    """Persist a non-GitHub lead + LinkedIn draft; None on any failure."""
+    try:
+        draft_candidate = await generate_linkedin_draft(draft_context, lead)
+    except Exception:
+        draft_candidate = None
+    if not draft_candidate:
+        try:
+            draft_candidate = fallback_linkedin_draft(draft_context, lead)
+        except Exception:
+            return None
+    if not draft_candidate or not str(draft_candidate.get("body") or "").strip():
+        return None
+
+    try:
+        lead_response = (
+            supabase.table("leads")
+            .upsert(
+                {
+                    "profile_id": profile_id,
+                    "github_profile_id": None,
+                    "detected_event_id": None,
+                    "title": lead["title"],
+                    "angle": lead["angle"],
+                    "relevant_skills": lead.get("relevant_skills") or [],
+                    "confidence": lead.get("confidence"),
+                    "status": "pending",
+                    "source": lead.get("source") or "manual",
+                    "dedup_key": lead["dedup_key"],
+                },
+                on_conflict="profile_id,dedup_key",
+            )
+            .execute()
+        )
+    except Exception:
+        return None
+
+    if not lead_response.data:
+        return None
+
+    lead_row = lead_response.data[0]
+    try:
+        draft_response = (
+            supabase.table("lead_drafts")
+            .upsert(
+                {
+                    "lead_id": lead_row["id"],
+                    "channel": "linkedin_post",
+                    "subject": draft_candidate.get("subject"),
+                    "body": draft_candidate["body"],
+                    "citations": draft_candidate.get("citations", []),
+                    "prompt_version": NONGITHUB_PROMPT_VERSION,
+                    "model": "openrouter/free",
+                    "status": "draft",
+                },
+                on_conflict="lead_id",
+            )
+            .execute()
+        )
+    except Exception:
+        supabase.table("leads").delete().eq("id", lead_row["id"]).execute()
+        return None
+
+    if not draft_response.data:
+        supabase.table("leads").delete().eq("id", lead_row["id"]).execute()
+        return None
+
+    return {"lead": lead_row, "draft": draft_response.data[0], "event": None, "repository": None}
+
+
+async def _generate_nongithub_leads(
+    profile: dict,
+    skill_gap: dict | None,
+    roadmap: dict | None,
+    allowed_skills: list[str],
+) -> list[dict]:
+    """Generate resume + milestone leads (no GitHub required)."""
+    profile_id = profile["id"]
+    draft_context = _draft_context_for_nongithub(profile, skill_gap, roadmap, allowed_skills)
+    generated: list[dict] = []
+
+    # Resume projects (skips gracefully when no resume analysis exists).
+    try:
+        resume = _load_latest_resume(profile_id)
+    except Exception:
+        resume = None
+    if resume:
+        try:
+            resume_leads = await generate_resume_project_leads(
+                {
+                    "target_role": profile.get("target_role"),
+                    "profile_context": draft_context["profile_context"],
+                    "resume_analysis": resume,
+                    "allowed_skills": allowed_skills,
+                }
+            )
+        except Exception:
+            resume_leads = []
+        for lead in resume_leads or []:
+            stored = await _store_nongithub_lead(profile_id, lead, draft_context)
+            if stored:
+                generated.append(stored)
+
+    # Roadmap milestones for newly completed skills.
+    try:
+        completed = _load_completed_roadmap_skills(profile_id)
+    except Exception:
+        completed = []
+    roadmap_items = (roadmap or {}).get("roadmap") or []
+    roadmap_by_skill = {
+        str(item.get("skill") or "").strip().lower(): item
+        for item in roadmap_items
+        if isinstance(item, dict) and str(item.get("skill") or "").strip()
+    }
+    for skill in completed:
+        try:
+            milestone = build_milestone_lead(
+                skill,
+                roadmap_by_skill.get(skill.strip().lower()),
+                draft_context["profile_context"],
+                set(allowed_skills),
+            )
+        except Exception:
+            milestone = None
+        if not milestone:
+            continue
+        stored = await _store_nongithub_lead(profile_id, milestone, draft_context)
+        if stored:
+            generated.append(stored)
+
+    return generated
+
+
 def _serialize_lead_record(
     lead: dict,
     draft: dict | None = None,
@@ -1623,6 +1877,7 @@ def _serialize_lead_record(
         "github_profile_id": lead.get("github_profile_id"),
         "detected_event_id": lead.get("detected_event_id"),
         "dedup_key": lead.get("dedup_key"),
+        "source": lead.get("source") or "github",
         "title": lead.get("title"),
         "angle": lead.get("angle"),
         "relevant_skills": lead.get("relevant_skills") or [],
@@ -2143,6 +2398,10 @@ async def generate_profile_leads(
     profile = _resolve_profile_for_user(user)
     profile_id = profile["id"]
 
+    full_profile = _load_profile_context(profile_id)
+    skill_gap = _load_latest_skill_gap(profile_id)
+    roadmap = _load_latest_roadmap(profile_id)
+
     try:
         github_profile_response = (
             supabase
@@ -2155,37 +2414,60 @@ async def generate_profile_leads(
     except Exception:
         github_profile_response = None
 
+    generated: list[dict] = []
+
+    # GitHub branch (unchanged behavior when connected with fresh pushes).
+    github_message: str | None = None
     if not github_profile_response or not github_profile_response.data:
-        return {
-            "generated": [],
-            "message": "No GitHub profile connected.",
-        }
+        github_message = "No GitHub profile connected."
+    else:
+        github_profile = _load_github_profile_context(github_profile_response.data["id"])
+        if not github_profile:
+            github_message = "No GitHub profile connected."
+        else:
+            github_profile_id = github_profile["id"]
+            detected_events = _load_repo_push_events(github_profile_id)
+            if not detected_events:
+                github_message = "No repo_pushed events available for lead generation."
+            else:
+                generated.extend(
+                    await _generate_and_store_leads_for_events(
+                        full_profile,
+                        github_profile,
+                        _load_github_repositories(github_profile_id),
+                        _load_github_activity(github_profile_id),
+                        skill_gap,
+                        roadmap,
+                        detected_events,
+                    )
+                )
 
-    github_profile = _load_github_profile_context(github_profile_response.data["id"])
-
-    if not github_profile:
-        return {
-            "generated": [],
-            "message": "No GitHub profile connected.",
-        }
-
-    github_profile_id = github_profile["id"]
-    detected_events = _load_repo_push_events(github_profile_id)
-    if not detected_events:
-        return {
-            "generated": [],
-            "message": "No repo_pushed events available for lead generation.",
-        }
-
-    generated = await _generate_and_store_leads_for_events(
-        _load_profile_context(profile_id),
-        github_profile,
-        _load_github_repositories(github_profile_id),
-        _load_github_activity(github_profile_id),
-        _load_latest_skill_gap(profile_id),
-        _load_latest_roadmap(profile_id),
-        detected_events,
+    # Non-GitHub branch: resume projects + roadmap milestones (no GitHub needed).
+    nongithub_context = _build_lead_context(
+        full_profile,
+        None,
+        [],
+        None,
+        skill_gap,
+        roadmap,
     )
+    try:
+        generated.extend(
+            await _generate_nongithub_leads(
+                full_profile,
+                skill_gap,
+                roadmap,
+                nongithub_context["allowed_skills"],
+            )
+        )
+    except Exception:
+        pass
+
+    if not generated and github_message:
+        return {
+            "generated": [],
+            "message": github_message,
+        }
 
     return {
         "generated": [
@@ -2193,6 +2475,79 @@ async def generate_profile_leads(
             for item in generated
         ],
         "count": len(generated),
+    }
+
+
+class ManualLeadPayload(BaseModel):
+    text: str
+
+
+@app.post("/api/profile/leads/manual")
+async def create_manual_lead(
+    payload: ManualLeadPayload,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    user = get_user_from_token(credentials.credentials)
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="User not authenticated",
+        )
+
+    text = (payload.text or "").strip()
+    if len(text) < 10 or len(text) > 2000:
+        raise HTTPException(
+            status_code=400,
+            detail="Please describe your work in 10 to 2000 characters.",
+        )
+
+    profile = _resolve_profile_for_user(user)
+    profile_id = profile["id"]
+
+    full_profile = _load_profile_context(profile_id)
+    skill_gap = _load_latest_skill_gap(profile_id)
+    roadmap = _load_latest_roadmap(profile_id)
+    nongithub_context = _build_lead_context(
+        full_profile,
+        None,
+        [],
+        None,
+        skill_gap,
+        roadmap,
+    )
+
+    try:
+        lead = await generate_manual_lead(text, {
+            "target_role": full_profile.get("target_role"),
+            "profile_context": {
+                "career_goal": full_profile.get("career_goal"),
+                "target_role": full_profile.get("target_role"),
+            },
+            "allowed_skills": nongithub_context["allowed_skills"],
+        })
+    except Exception:
+        lead = None
+    if not lead:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not draft a lead from that note.",
+        )
+
+    draft_context = _draft_context_for_nongithub(
+        full_profile, skill_gap, roadmap, nongithub_context["allowed_skills"]
+    )
+    stored = await _store_nongithub_lead(profile_id, lead, draft_context)
+    if not stored:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not save the lead draft.",
+        )
+
+    return {
+        "lead": _serialize_lead_record(
+            stored["lead"], stored["draft"], stored["event"], stored["repository"]
+        ),
     }
 
 

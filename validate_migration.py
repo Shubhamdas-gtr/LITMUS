@@ -68,3 +68,16 @@ print('No credential fields anywhere:', len(found) == 0, 'found:', found if foun
 
 # No ALTER/DROP on existing tables
 print('No ALTER existing Phase C tables:', 'ALTER TABLE public.github_profiles' not in t and 'ALTER TABLE public.github_repositories' not in t and 'ALTER TABLE public.github_activity' not in t and 'DROP' not in t)
+
+# Phase D3 — non-GitHub leads (additive only)
+print('\n--- Phase D3 Checks ---')
+d3_path = r'C:\Users\SHUBHAM\Desktop\LITMUS\LITMUS\supabase\migrations\20260828030000_phase_d3_nongithub_leads.sql'
+d3 = open(d3_path, 'r', encoding='utf-8').read()
+d3_lower = d3.lower()
+print('D3. github_profile_id nullable:', 'alter column github_profile_id drop not null' in d3_lower)
+print('D3. source column added:', 'add column if not exists source' in d3_lower)
+print('D3. source default github:', "default 'github'" in d3_lower)
+print('D3. source index:', 'leads_source_idx' in d3_lower)
+print('D3. no FK/policy changes:', 'references' not in d3_lower and 'policy' not in d3_lower)
+print('D3. no credential fields:', all(f not in d3_lower for f in forbidden))
+print('D3. no destructive statements:', 'drop table' not in d3_lower and 'delete from' not in d3_lower and 'truncate' not in d3_lower)
