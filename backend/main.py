@@ -304,27 +304,14 @@ def save_assessment(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile_id = _resolve_profile_for_user(user)["id"]
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(
             status_code=500,
             detail=f"Could not load profile: {str(error)}",
         )
-
-    if not profile_response.data:
-        raise HTTPException(
-            status_code=404,
-            detail="Profile not found",
-        )
-
-    profile_id = profile_response.data["id"]
 
     try:
         supabase.table("profiles").update({
@@ -415,27 +402,14 @@ def upload_resume(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile_id = _resolve_profile_for_user(user)["id"]
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
-
-    if not profile_response.data:
-        raise HTTPException(
-            status_code=404,
-            detail="Profile not found",
-        )
-
-    profile_id = profile_response.data["id"]
 
     file_extension = (
         "pdf"
@@ -486,27 +460,22 @@ def get_resume_url(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id, resume_path")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile_response = _get_or_create_profile(user, "id, resume_path")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    if not profile_response.data:
+    if not profile_response:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    resume_path = profile_response.data.get("resume_path")
+    resume_path = profile_response.get("resume_path")
 
     if not resume_path:
         raise HTTPException(
@@ -546,27 +515,23 @@ async def analyze_user_resume(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id, resume_path, career_goal, target_role")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
+        profile = _get_or_create_profile(
+            user, "id, resume_path, career_goal, target_role"
         )
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    if not profile_response.data:
+    if not profile:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    profile = profile_response.data
     resume_path = profile.get("resume_path")
 
     if not resume_path:
@@ -639,27 +604,21 @@ async def analyze_skill_gap_endpoint(
 
     # Get profile
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id, target_role")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile = _get_or_create_profile(user, "id, target_role")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    if not profile_response.data:
+    if not profile:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    profile = profile_response.data
     profile_id = profile["id"]
     target_role = profile.get("target_role")
 
@@ -758,27 +717,21 @@ async def generate_roadmap(
 
     # Get profile
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id, target_role")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile = _get_or_create_profile(user, "id, target_role")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    if not profile_response.data:
+    if not profile:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    profile = profile_response.data
     profile_id = profile["id"]
     target_role = profile.get("target_role")
 
@@ -876,27 +829,21 @@ async def generate_all(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id, target_role, resume_path")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile = _get_or_create_profile(user, "id, target_role, resume_path")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    if not profile_response.data:
+    if not profile:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
 
-    profile = profile_response.data
     profile_id = profile["id"]
     target_role = profile.get("target_role")
 
@@ -1069,24 +1016,14 @@ def get_roadmap(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile_id = _resolve_profile_for_user(user)["id"]
+    except HTTPException:
+        raise
     except Exception:
-        profile_response = None
-
-    if not profile_response or not profile_response.data:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
-
-    profile_id = profile_response.data["id"]
 
     try:
         roadmap_response = (
@@ -1126,24 +1063,14 @@ def get_skill_gap(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile_id = _resolve_profile_for_user(user)["id"]
+    except HTTPException:
+        raise
     except Exception:
-        profile_response = None
-
-    if not profile_response or not profile_response.data:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
-
-    profile_id = profile_response.data["id"]
 
     skill_gap_response = (
         supabase
@@ -1182,15 +1109,18 @@ def get_profile(
         )
 
     try:
+        stub = _resolve_profile_for_user(user)
         profile_response = _retry_supabase(
             "profile",
             lambda: supabase
             .table("profiles")
             .select("*")
-            .eq("auth_user_id", user.id)
+            .eq("id", stub["id"])
             .single()
             .execute(),
         )
+    except HTTPException:
+        raise
     except Exception:
         profile_response = None
 
@@ -1243,29 +1173,58 @@ def get_profile(
     }
 
 
-def _resolve_profile_for_user(user) -> dict:
-    """Return the profiles row for the authenticated user or raise 404."""
+def _get_or_create_profile(user, columns: str = "id") -> dict:
+    """Return the profiles row for the user, creating it on first use.
+
+    No signup trigger or frontend call provisions profiles today, so the
+    first authenticated request creates the row (idempotent upsert on
+    auth_user_id). Genuine DB failures raise 503; a missing row after a
+    successful upsert raises 500.
+    """
     try:
         response = _retry_supabase(
             "profile",
             lambda: supabase
             .table("profiles")
-            .select("id")
+            .select(columns)
             .eq("auth_user_id", user.id)
+            .maybe_single()
+            .execute(),
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="Profile temporarily unavailable. Please retry.",
+        )
+    if response.data:
+        return response.data
+
+    try:
+        created = _retry_supabase(
+            "profile",
+            lambda: supabase
+            .table("profiles")
+            .upsert({"auth_user_id": user.id}, on_conflict="auth_user_id")
+            .select(columns)
             .single()
             .execute(),
         )
     except Exception:
         raise HTTPException(
-            status_code=404,
-            detail="Profile not found",
+            status_code=503,
+            detail="Profile temporarily unavailable. Please retry.",
         )
-    if not response.data:
+    if not created.data:
         raise HTTPException(
-            status_code=404,
-            detail="Profile not found",
+            status_code=500,
+            detail="Could not create profile.",
         )
-    return response.data
+    return created.data
+
+
+def _resolve_profile_for_user(user) -> dict:
+    """Return the profiles row id for the authenticated user."""
+    return _get_or_create_profile(user, "id")
 
 
 def _load_repo_freshness_snapshot(github_profile_id: str | None) -> dict[str, str]:
@@ -2986,27 +2945,14 @@ def get_roadmap_progress(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile_id = _resolve_profile_for_user(user)["id"]
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
-
-    if not profile_response.data:
-        raise HTTPException(
-            status_code=404,
-            detail="Profile not found",
-        )
-
-    profile_id = profile_response.data["id"]
 
     try:
         progress_response = _retry_supabase(
@@ -3044,27 +2990,14 @@ def toggle_roadmap_progress(
         )
 
     try:
-        profile_response = (
-            supabase
-            .table("profiles")
-            .select("id")
-            .eq("auth_user_id", user.id)
-            .single()
-            .execute()
-        )
+        profile_id = _resolve_profile_for_user(user)["id"]
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(
             status_code=404,
             detail="Profile not found",
         )
-
-    if not profile_response.data:
-        raise HTTPException(
-            status_code=404,
-            detail="Profile not found",
-        )
-
-    profile_id = profile_response.data["id"]
 
     existing_response = (
     supabase
