@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { API_URL } from "@/lib/api";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -75,63 +74,6 @@ export default function AuthPage() {
     setLoading(false);
   }
 
-async function testProfileApi() {
-  setMessage("");
-  setLoading(true);
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    setMessage("No active Supabase session.");
-    setLoading(false);
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_URL}/api/profile/assessment`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-  career_goal: "Build a career in technology",
-  target_role: "Software Engineer",
-  interests: ["Technology", "Problem Solving"],
-  skills: ["Python", "React"],
-  skill_confidence: {
-    
-    Python: "comfortable",
-    React: "getting_started",
-
-  },
-  assessment_answers: {
-    q1: 1,
-    q2: 2,
-  },
-}),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      setMessage(
-  typeof data.detail === "string"
-    ? data.detail
-    : JSON.stringify(data.detail)
-);
-    } else {
-      setMessage("Profile API success: " + JSON.stringify(data));
-    }
-  } catch {
-    setMessage("Could not reach the backend.");
-  } finally {
-    setLoading(false);
-  }
-}
-
   return (
     <main className="litmus-shell flex min-h-screen items-center justify-center px-4 litmus-grid-lines">
       <div className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface)] p-8 shadow-[0_24px_60px_rgba(0,0,0,0.44)]">
@@ -181,15 +123,6 @@ async function testProfileApi() {
                 : "Sign in"}
           </button>
         </form>
-
-        <button
-          type="button"
-          onClick={testProfileApi}
-          disabled={loading}
-          className="mt-4 w-full rounded-full border border-[var(--border)] px-6 py-3.5 text-sm font-semibold text-[var(--foreground)] disabled:opacity-60"
-        >
-          Test Profile API
-        </button>
 
         {message && (
           <p className="mt-4 text-sm leading-6 text-[var(--muted)]">
