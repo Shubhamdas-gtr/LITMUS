@@ -5,6 +5,23 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // Same guard as the browser client: this route must use the publishable
+  // key, never sb_secret_*. Misconfiguration would break OAuth code exchange.
+  if (
+    !supabaseUrl ||
+    !supabaseAnonKey ||
+    supabaseAnonKey.startsWith("sb_secret_") ||
+    supabaseAnonKey.includes("service_role")
+  ) {
+    console.error(
+      "Supabase callback misconfigured: NEXT_PUBLIC_SUPABASE_ANON_KEY must be the publishable key (sb_publishable_...)."
+    );
+    return NextResponse.redirect(`${origin}/auth`);
+  }
+
   if (code) {
     const pendingCookies: {
       name: string;
@@ -13,8 +30,8 @@ export async function GET(request: NextRequest) {
     }[] = [];
 
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      supabaseUrl,
+      supabaseAnonKey,
       {
         cookies: {
           getAll() {
