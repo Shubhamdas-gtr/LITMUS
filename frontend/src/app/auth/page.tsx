@@ -104,9 +104,14 @@ export default function AuthPage() {
     }
 
     if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
+      const { data: signUpData, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          // Confirmation link must return to this deployment (localhost or
+          // Vercel), not whatever Site URL is set in the Supabase dashboard.
+          emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+        },
       });
 
       if (error) {
@@ -116,10 +121,19 @@ export default function AuthPage() {
             : error.message
         );
         setShowResend(isEmailNotConfirmedError(error.message));
+      } else if (signUpData.session) {
+        // Confirm-email OFF: Supabase returns a session immediately.
+        const existingName = String(
+          signUpData.session.user.user_metadata?.display_name ?? ""
+        ).trim();
+        setMessage("Account created. Taking you to the next step...");
+        router.replace(existingName ? "/dashboard" : "/welcome");
       } else {
+        // Confirm-email ON: no session until the link is clicked.
         setMessage(
-          "Account created. Check your email if confirmation is required."
+          "Account created. We sent a confirmation link to your email — check inbox and spam, then click the link and sign in."
         );
+        setShowResend(true);
       }
     } else {
       const { error } = await supabase.auth.signInWithPassword({
@@ -165,11 +179,14 @@ export default function AuthPage() {
     const { error } = await supabase.auth.resend({
       type: "signup",
       email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+      },
     });
     setMessage(
       error
         ? error.message
-        : "Confirmation email resent. Check your inbox, then sign in."
+        : "Confirmation email resent. Check your inbox and spam, then click the link and sign in."
     );
     setResendLoading(false);
   }
