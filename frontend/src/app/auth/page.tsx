@@ -6,43 +6,6 @@ import { supabase } from "@/lib/supabase";
 
 const PASSWORD_MIN_LENGTH = 6;
 
-type PasswordRule = {
-  id: string;
-  label: string;
-  valid: boolean;
-};
-
-function getPasswordRules(password: string): PasswordRule[] {
-  return [
-    {
-      id: "length",
-      label: `At least ${PASSWORD_MIN_LENGTH} characters`,
-      valid: password.length >= PASSWORD_MIN_LENGTH,
-    },
-    {
-      id: "uppercase",
-      label: "1 uppercase letter (A–Z)",
-      valid: /[A-Z]/.test(password),
-    },
-    {
-      id: "numeric",
-      label: "1 number (0–9)",
-      valid: /\d/.test(password),
-    },
-    {
-      id: "special",
-      label: "1 special character (e.g. ! @ # $)",
-      valid: /[^A-Za-z0-9]/.test(password),
-    },
-  ];
-}
-
-function getMissingRules(password: string): string[] {
-  return getPasswordRules(password)
-    .filter((rule) => !rule.valid)
-    .map((rule) => rule.label);
-}
-
 function isSecretKeyError(message: string): boolean {
   const normalized = message.toLowerCase();
   return (
@@ -68,8 +31,6 @@ export default function AuthPage() {
   const [resendLoading, setResendLoading] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const passwordRules = getPasswordRules(password);
-
   useEffect(() => {
     void (async () => {
       const {
@@ -90,14 +51,11 @@ export default function AuthPage() {
     setMessage("");
     setShowResend(false);
 
-    // Password protocol enforced on both sign-up and sign-in (per request):
-    // min 6 chars + 1 uppercase + 1 numeric + 1 special character.
-    const missing = getMissingRules(password);
-    if (missing.length > 0) {
+    // Min length enforced on sign-up only. Sign-in never blocks on
+    // password shape — always attempt Supabase and surface its error.
+    if (isSignUp && password.length < PASSWORD_MIN_LENGTH) {
       setMessage(
-        isSignUp
-          ? `Password must include: ${missing.join(", ")}.`
-          : "Password does not meet current requirements. If this is an older account, reset your password to update it."
+        `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`
       );
       setLoading(false);
       return;
@@ -225,7 +183,7 @@ export default function AuthPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               required
-              minLength={PASSWORD_MIN_LENGTH}
+              minLength={isSignUp ? PASSWORD_MIN_LENGTH : undefined}
               autoComplete={isSignUp ? "new-password" : "current-password"}
               className="w-full rounded-xl border border-[var(--border)] bg-[var(--background)] px-4 py-3 pr-24 text-sm outline-none focus:border-[var(--accent)]"
             />
@@ -234,7 +192,7 @@ export default function AuthPage() {
               onClick={() => setShowPassword(!showPassword)}
               aria-label={showPassword ? "Hide password" : "Show password"}
               aria-pressed={showPassword}
-              className="absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-[var(--muted)] transition hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+              className="absolute top-1/2 right-2 z-10 flex -translate-y-1/2 items-center gap-1.5 rounded-lg bg-transparent px-2.5 py-1.5 text-xs font-medium text-[var(--muted-strong)] transition hover:text-[var(--accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
             >
               {showPassword ? (
                 <svg
@@ -271,24 +229,11 @@ export default function AuthPage() {
             </button>
           </div>
 
-          <ul
-            aria-label="Password requirements"
-            className="grid grid-cols-1 gap-1.5 text-xs leading-5"
-          >
-            {passwordRules.map((rule) => (
-              <li
-                key={rule.id}
-                className={
-                  rule.valid
-                    ? "text-[var(--accent)]"
-                    : "text-[var(--muted)]"
-                }
-              >
-                {rule.valid ? "✓ " : "○ "}
-                {rule.label}
-              </li>
-            ))}
-          </ul>
+          {isSignUp && (
+            <p className="text-xs leading-5 text-[var(--muted)]">
+              At least {PASSWORD_MIN_LENGTH} characters.
+            </p>
+          )}
 
           <button
             type="submit"
