@@ -930,7 +930,7 @@ export default function DashboardPage() {
       const accessToken = await getAccessToken();
       if (!accessToken) return;
 
-      await fetch(`${API_URL}/api/profile/roadmap/progress`, {
+      const response = await fetch(`${API_URL}/api/profile/roadmap/progress`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -938,6 +938,9 @@ export default function DashboardPage() {
         },
         body: JSON.stringify({ skill }),
       });
+      if (!response.ok) {
+        throw new Error(`Progress update failed: ${response.status}`);
+      }
     } catch {
       setCompletedSkills((prev) => {
         const next = new Set(prev);

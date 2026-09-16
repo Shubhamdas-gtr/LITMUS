@@ -24,7 +24,7 @@ Two visual references define the direction.
 
 File:
 
-`./design/litmus-brand-reference.png`
+`./design/litmus image.png` (canonical brand mark; do not rename without updating refs)
 
 This is the canonical reference for:
 
@@ -743,7 +743,7 @@ The logo should remain recognizable at small sizes.
 
 The canonical LITMUS mark is the logo shown in:
 
-`./design/litmus-brand-reference.png`
+`./design/litmus image.png`
 
 Use the logo consistently.
 

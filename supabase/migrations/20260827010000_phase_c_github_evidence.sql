@@ -77,7 +77,9 @@ alter table public.github_activity enable row level security;
 -- Owner SELECT policies: authenticated users can read only their own evidence.
 -- Ownership chain: auth.uid() -> profiles.auth_user_id -> github_profiles.profile_id
 -- Repositories and activity are scoped transitively via github_profiles.
+-- DROP IF EXISTS makes re-apply safe (CREATE POLICY has no IF NOT EXISTS).
 
+drop policy if exists "github_profiles_owner_select" on public.github_profiles;
 create policy "github_profiles_owner_select"
   on public.github_profiles for select
   to authenticated
@@ -89,6 +91,7 @@ create policy "github_profiles_owner_select"
     )
   );
 
+drop policy if exists "github_repositories_owner_select" on public.github_repositories;
 create policy "github_repositories_owner_select"
   on public.github_repositories for select
   to authenticated
@@ -103,6 +106,7 @@ create policy "github_repositories_owner_select"
     )
   );
 
+drop policy if exists "github_activity_owner_select" on public.github_activity;
 create policy "github_activity_owner_select"
   on public.github_activity for select
   to authenticated

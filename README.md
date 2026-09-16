@@ -244,11 +244,13 @@ Next.js dashboard
 
 # Screenshots
 
+> Note: `docs/screenshots/*.png` are not tracked yet. Add them or see live deployment. Placeholders below.
+
 ## LITMUS Landing / Career Journey
 
 The main product experience introduces the career journey around the four stages: Understand, Build, Demonstrate, and Get Opportunities.
 
-![LITMUS career journey](docs/screenshots/assessment-home.png)
+<!-- TODO: add docs/screenshots/assessment-home.png -->
 
 ---
 
@@ -256,7 +258,7 @@ The main product experience introduces the career journey around the four stages
 
 The assessment begins with a clear question about the student's target and moves through the guided flow.
 
-![LITMUS guided assessment](docs/screenshots/assessment-step.png)
+<!-- TODO: add docs/screenshots/assessment-step.png -->
 
 ---
 
@@ -264,7 +266,7 @@ The assessment begins with a clear question about the student's target and moves
 
 The GitHub intelligence section turns repository and activity data into visible evidence.
 
-![LITMUS GitHub intelligence](docs/screenshots/github-intelligence.png)
+<!-- TODO: add docs/screenshots/github-intelligence.png -->
 
 ---
 
@@ -633,9 +635,12 @@ Relevant migrations include:
 
 ```text
 supabase/migrations/
+├── 20260826010000_phase_b_base.sql
 ├── 20260827010000_phase_c_github_evidence.sql
 ├── 20260828010000_phase_d1_change_detection.sql
-└── 20260828020000_phase_d2_leads.sql
+├── 20260828020000_phase_d2_leads.sql
+├── 20260828030000_phase_d3_nongithub_leads.sql
+└── 20260828040000_phase_e_repo_urls.sql
 ```
 
 ## Phase C — GitHub Evidence
@@ -813,21 +818,21 @@ Typical configuration categories include:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-NEXT_PUBLIC_API_BASE_URL=
+NEXT_PUBLIC_API_URL=
 ```
 
 ### Backend
 
 ```env
 SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_SECRET_KEY=
 ```
 
 ### AI
 
 ```env
 # Provider-specific AI configuration
-AI_API_KEY=
+OPENROUTER_API_KEY=
 ```
 
 Do **not** commit real secrets to Git.
@@ -1172,10 +1177,12 @@ LITMUS/
 │
 ├── backend/
 │   ├── main.py
+│   ├── requirements.txt
 │   └── services/
 │       ├── ai_service.py
 │       ├── github_service.py
-│       └── lead_service.py
+│       ├── lead_service.py
+│       └── resume_parser.py
 │
 ├── frontend/
 │   ├── package.json
@@ -1189,9 +1196,15 @@ LITMUS/
 │       │   ├── auth/
 │       │   ├── dashboard/
 │       │   ├── transition/
+│       │   ├── welcome/
 │       │   ├── globals.css
 │       │   ├── layout.tsx
 │       │   └── page.tsx
+│       │
+│       ├── components/
+│       │   ├── SiteNav.tsx
+│       │   ├── SiteFooter.tsx
+│       │   └── landing/
 │       │
 │       └── lib/
 │           ├── api.ts
@@ -1200,9 +1213,12 @@ LITMUS/
 │
 ├── supabase/
 │   └── migrations/
+│       ├── 20260826010000_phase_b_base.sql
 │       ├── 20260827010000_phase_c_github_evidence.sql
 │       ├── 20260828010000_phase_d1_change_detection.sql
-│       └── 20260828020000_phase_d2_leads.sql
+│       ├── 20260828020000_phase_d2_leads.sql
+│       ├── 20260828030000_phase_d3_nongithub_leads.sql
+│       └── 20260828040000_phase_e_repo_urls.sql
 │
 ├── design/
 │   ├── designhint.png

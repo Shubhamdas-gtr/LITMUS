@@ -1622,6 +1622,22 @@ async def _generate_and_store_leads_for_events(
         if not dedup_key:
             continue
 
+        # Don't resurrect user-reviewed leads: if a lead with this dedup_key
+        # already exists and is no longer pending, keep its status.
+        try:
+            existing = (
+                supabase.table("leads")
+                .select("id, status")
+                .eq("profile_id", profile["id"])
+                .eq("dedup_key", dedup_key)
+                .maybe_single()
+                .execute()
+            )
+            if existing and existing.data and existing.data.get("status") != "pending":
+                continue
+        except Exception:
+            pass
+
         lead_data = {
             "profile_id": profile["id"],
             "github_profile_id": github_profile["id"],
@@ -1643,11 +1659,9 @@ async def _generate_and_store_leads_for_events(
                 )
                 .execute()
             )
-        except Exception as error:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Could not save lead: {str(error)}",
-            )
+        except Exception:
+            # Per-event continue: one bad event must not abort the batch.
+            continue
 
         if not lead_response.data:
             continue
@@ -1673,12 +1687,12 @@ async def _generate_and_store_leads_for_events(
                 )
                 .execute()
             )
-        except Exception as error:
-            supabase.table("leads").delete().eq("id", lead_id).execute()
-            raise HTTPException(
-                status_code=500,
-                detail=f"Could not save lead draft: {str(error)}",
-            )
+        except Exception:
+            try:
+                supabase.table("leads").delete().eq("id", lead_id).execute()
+            except Exception:
+                pass
+            continue
 
         if not draft_response.data:
             supabase.table("leads").delete().eq("id", lead_id).execute()
@@ -1749,6 +1763,23 @@ async def _store_nongithub_lead(
             return None
     if not draft_candidate or not str(draft_candidate.get("body") or "").strip():
         return None
+
+    # Don't resurrect dismissed/qualified/converted manual leads on resubmit.
+    try:
+        dedup = (lead.get("dedup_key") or "").strip() if isinstance(lead, dict) else ""
+        if dedup:
+            existing = (
+                supabase.table("leads")
+                .select("id, status")
+                .eq("profile_id", profile_id)
+                .eq("dedup_key", dedup)
+                .maybe_single()
+                .execute()
+            )
+            if existing and existing.data and existing.data.get("status") != "pending":
+                return None
+    except Exception:
+        pass
 
     try:
         lead_response = (
@@ -2258,6 +2289,8 @@ async def sync_github_evidence(
                     "github_profile_id": github_profile_id,
                     "github_repo_id": repo.get("github_repo_id"),
                     "name": repo.get("name") or "",
+                    "full_name": repo.get("full_name"),
+                    "html_url": repo.get("html_url"),
                     "description": repo.get("description") or None,
                     "languages": repo.get("languages") or {},
                     "topics": repo.get("topics") or [],
@@ -2267,6 +2300,7 @@ async def sync_github_evidence(
                     "is_private": bool(repo.get("is_private") or False),
                     "repo_created_at": repo.get("repo_created_at"),
                     "repo_updated_at": repo.get("repo_updated_at"),
+                    "latest_commit": repo.get("latest_commit") or {},
                     "updated_at": now,
                 },
                 on_conflict="github_profile_id,github_repo_id",
@@ -2653,17 +2687,30 @@ def get_profile_leads(
         ]
         if repo_ids:
             try:
-                repository_rows = _retry_supabase(
-                    "repositories",
-                    lambda: supabase
-                    .table("github_repositories")
-                    .select("*")
-                    .eq("github_profile_id", lead_rows[0]["github_profile_id"])
-                    .in_("github_repo_id", repo_ids)
-                    .execute()
-                    .data
-                    or [],
-                )
+                # Mixed GitHub + manual lists: collect every non-null profile id
+                # from leads + events instead of using lead_rows[0] (breaks when
+                # first lead is manual with NULL github_profile_id).
+                github_profile_ids = sorted({
+                    str(row["github_profile_id"])
+                    for row in lead_rows
+                    if row.get("github_profile_id")
+                } | {
+                    str(row["github_profile_id"])
+                    for row in event_rows
+                    if row.get("github_profile_id")
+                })
+                if github_profile_ids:
+                    repository_rows = _retry_supabase(
+                        "repositories",
+                        lambda: supabase
+                        .table("github_repositories")
+                        .select("*")
+                        .in_("github_profile_id", github_profile_ids)
+                        .in_("github_repo_id", repo_ids)
+                        .execute()
+                        .data
+                        or [],
+                    )
             except Exception as error:
                 raise HTTPException(
                     status_code=503,
@@ -2751,18 +2798,21 @@ def get_profile_lead(
         event = event_response.data if event_response and event_response.data else None
 
         if event and event.get("github_repo_id") is not None:
-            repo_response = (
-                supabase
-                .table("github_repositories")
-                .select("*")
-                .eq("github_profile_id", lead["github_profile_id"])
-                .eq("github_repo_id", event["github_repo_id"])
-                .maybe_single()
-                .execute()
-            )
-            repository = (
-                repo_response.data if repo_response and repo_response.data else None
-            )
+            # Manual/resume leads have NULL github_profile_id — skip repo
+            # lookup and let serializer fall back to event payload.
+            if lead.get("github_profile_id"):
+                repo_response = (
+                    supabase
+                    .table("github_repositories")
+                    .select("*")
+                    .eq("github_profile_id", lead["github_profile_id"])
+                    .eq("github_repo_id", event["github_repo_id"])
+                    .maybe_single()
+                    .execute()
+                )
+                repository = (
+                    repo_response.data if repo_response and repo_response.data else None
+                )
 
     return {
         "lead": _serialize_lead_record(

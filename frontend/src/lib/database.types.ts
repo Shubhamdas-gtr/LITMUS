@@ -90,6 +90,88 @@ export type Database = {
           },
         ]
       }
+      github_detected_events: {
+        Row: {
+          created_at: string
+          dedup_key: string
+          event_id: string
+          event_timestamp: string
+          event_type: string
+          github_profile_id: string
+          github_repo_id: number | null
+          id: string
+          observed_at: string
+          payload: Json
+        }
+        Insert: {
+          created_at?: string
+          dedup_key: string
+          event_id: string
+          event_timestamp: string
+          event_type: string
+          github_profile_id: string
+          github_repo_id?: number | null
+          id?: string
+          observed_at?: string
+          payload?: Json
+        }
+        Update: {
+          created_at?: string
+          dedup_key?: string
+          event_id?: string
+          event_timestamp?: string
+          event_type?: string
+          github_profile_id?: string
+          github_repo_id?: number | null
+          id?: string
+          observed_at?: string
+          payload?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "github_detected_events_github_profile_id_fkey"
+            columns: ["github_profile_id"]
+            isOneToOne: false
+            referencedRelation: "github_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      career_roadmaps: {
+        Row: {
+          created_at: string
+          id: string
+          profile_id: string
+          roadmap: Json
+          target_role: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          profile_id: string
+          roadmap?: Json
+          target_role?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          profile_id?: string
+          roadmap?: Json
+          target_role?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "career_roadmaps_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       github_profiles: {
         Row: {
           avatar_url: string | null
@@ -139,12 +221,15 @@ export type Database = {
           created_at: string
           description: string | null
           forks: number
+          full_name: string | null
           github_profile_id: string
           github_repo_id: number
+          html_url: string | null
           id: string
           is_fork: boolean
           is_private: boolean
           languages: Json
+          latest_commit: Json
           name: string
           repo_created_at: string | null
           repo_updated_at: string | null
@@ -156,12 +241,15 @@ export type Database = {
           created_at?: string
           description?: string | null
           forks?: number
+          full_name?: string | null
           github_profile_id: string
           github_repo_id: number
+          html_url?: string | null
           id?: string
           is_fork?: boolean
           is_private?: boolean
           languages?: Json
+          latest_commit?: Json
           name: string
           repo_created_at?: string | null
           repo_updated_at?: string | null
@@ -173,12 +261,15 @@ export type Database = {
           created_at?: string
           description?: string | null
           forks?: number
+          full_name?: string | null
           github_profile_id?: string
           github_repo_id?: number
+          html_url?: string | null
           id?: string
           is_fork?: boolean
           is_private?: boolean
           languages?: Json
+          latest_commit?: Json
           name?: string
           repo_created_at?: string | null
           repo_updated_at?: string | null
@@ -314,10 +405,11 @@ export type Database = {
           detected_event_id: string | null
           expires_at: string | null
           generated_at: string
-          github_profile_id: string
+          github_profile_id: string | null
           id: string
           profile_id: string
           relevant_skills: string[]
+          source: string
           status: string
           title: string
           updated_at: string
@@ -330,10 +422,11 @@ export type Database = {
           detected_event_id?: string | null
           expires_at?: string | null
           generated_at?: string
-          github_profile_id: string
+          github_profile_id?: string | null
           id?: string
           profile_id: string
           relevant_skills?: string[]
+          source?: string
           status?: string
           title: string
           updated_at?: string
@@ -346,10 +439,11 @@ export type Database = {
           detected_event_id?: string | null
           expires_at?: string | null
           generated_at?: string
-          github_profile_id?: string
+          github_profile_id?: string | null
           id?: string
           profile_id?: string
           relevant_skills?: string[]
+          source?: string
           status?: string
           title?: string
           updated_at?: string
@@ -532,6 +626,135 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      resume_analyses: {
+        Row: {
+          certifications: Json
+          created_at: string
+          education: Json
+          experience: Json
+          id: string
+          profile_id: string
+          projects: Json
+          skills: Json
+          summary: string
+          updated_at: string
+        }
+        Insert: {
+          certifications?: Json
+          created_at?: string
+          education?: Json
+          experience?: Json
+          id?: string
+          profile_id: string
+          projects?: Json
+          skills?: Json
+          summary?: string
+          updated_at?: string
+        }
+        Update: {
+          certifications?: Json
+          created_at?: string
+          education?: Json
+          experience?: Json
+          id?: string
+          profile_id?: string
+          projects?: Json
+          skills?: Json
+          summary?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "resume_analyses_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      skill_gap_analyses: {
+        Row: {
+          created_at: string
+          id: string
+          missing_skills: Json
+          profile_id: string
+          required_skills: Json
+          strengths: Json
+          target_role: string | null
+          updated_at: string
+          weak_skills: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          missing_skills?: Json
+          profile_id: string
+          required_skills?: Json
+          strengths?: Json
+          target_role?: string | null
+          updated_at?: string
+          weak_skills?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          missing_skills?: Json
+          profile_id?: string
+          required_skills?: Json
+          strengths?: Json
+          target_role?: string | null
+          updated_at?: string
+          weak_skills?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "skill_gap_analyses_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_checkpoints: {
+        Row: {
+          checkpoint_type: string
+          created_at: string
+          github_profile_id: string
+          id: string
+          last_event_at: string | null
+          last_event_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          checkpoint_type: string
+          created_at?: string
+          github_profile_id: string
+          id?: string
+          last_event_at?: string | null
+          last_event_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          checkpoint_type?: string
+          created_at?: string
+          github_profile_id?: string
+          id?: string
+          last_event_at?: string | null
+          last_event_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_checkpoints_github_profile_id_fkey"
+            columns: ["github_profile_id"]
+            isOneToOne: false
+            referencedRelation: "github_profiles"
             referencedColumns: ["id"]
           },
         ]

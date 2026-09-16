@@ -55,7 +55,9 @@ alter table public.sync_checkpoints enable row level security;
 -- Owner SELECT policies: authenticated users can read only their own records.
 -- Ownership chain: auth.uid() -> profiles.auth_user_id -> profiles.id -> github_profiles.profile_id -> new tables.github_profile_id
 -- No authenticated INSERT/UPDATE/DELETE; writes via service_role only (bypass RLS).
+-- DROP IF EXISTS makes re-apply safe.
 
+drop policy if exists "github_detected_events_owner_select" on public.github_detected_events;
 create policy "github_detected_events_owner_select"
   on public.github_detected_events for select
   to authenticated
@@ -70,6 +72,7 @@ create policy "github_detected_events_owner_select"
     )
   );
 
+drop policy if exists "sync_checkpoints_owner_select" on public.sync_checkpoints;
 create policy "sync_checkpoints_owner_select"
   on public.sync_checkpoints for select
   to authenticated

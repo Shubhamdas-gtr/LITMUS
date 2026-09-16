@@ -21,7 +21,7 @@ def _parse_github_timestamp(value: str | None) -> datetime | None:
         return None
     try:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
+    except (ValueError, TypeError, AttributeError):
         return None
 
 
@@ -143,10 +143,18 @@ def _paginate(
     items: list[dict] = []
     current_url: str | None = url
     page_limit = 10
+    first_page = True
 
     while current_url and page_limit > 0:
         try:
-            response = client.get(current_url, headers=headers, params=params)
+            # next_url from Link header already contains query params;
+            # re-sending original params would duplicate ?page=&... and can
+            # reset pagination / cause 422 on commits endpoint.
+            response = client.get(
+                current_url,
+                headers=headers,
+                params=params if first_page else None,
+            )
         except httpx.HTTPError:
             raise GitHubAPIError("GitHub is temporarily unavailable", 503)
 
@@ -170,6 +178,7 @@ def _paginate(
                 break
         current_url = next_url
         page_limit -= 1
+        first_page = False
 
     return items
 
@@ -346,10 +355,8 @@ def collect_github_evidence(provider_token: str) -> dict:
                 }
             )
 
-            for lang, size in languages.items():
-                language_distribution[lang] = (
-                    language_distribution.get(lang, 0) + int(size or 0)
-                )
+            # NOTE: language_distribution counted once per repo (second loop
+            # removed — it doubled every value).
 
         # Bounded enrichment: latest commit message for recently pushed repos
         # only (max 20, pushed within ~90 days). Failures are ignored so sync
@@ -390,6 +397,7 @@ def collect_github_evidence(provider_token: str) -> dict:
             issues = 0
 
         commits_30d = 0
+        active_days: set[str] = set()
         commits_cutoff = datetime.now(timezone.utc) - timedelta(days=30)
         display_name = user.get("name")
         email = user.get("email")
@@ -401,7 +409,7 @@ def collect_github_evidence(provider_token: str) -> dict:
                 pushed_dt = datetime.fromisoformat(
                     str(pushed_at).replace("Z", "+00:00")
                 )
-            except ValueError:
+            except (ValueError, TypeError, AttributeError):
                 continue
             if pushed_dt < commits_cutoff:
                 continue
@@ -412,22 +420,30 @@ def collect_github_evidence(provider_token: str) -> dict:
                 params={"since": since, "per_page": 100},
             )
             if isinstance(commit_result, list):
-                commits_30d += sum(
-                    1
-                    for commit in commit_result
-                    if _commit_matches_authenticated_user(
+                for commit in commit_result:
+                    if not _commit_matches_authenticated_user(
                         commit,
                         username,
                         display_name,
                         email,
-                    )
-                )
+                    ):
+                        continue
+                    commits_30d += 1
+                    # Track unique commit dates for active_days_30d.
+                    try:
+                        meta = (commit.get("commit") or {}).get("author") or {}
+                        date_str = meta.get("date")
+                        dt = _parse_github_timestamp(date_str) if date_str else None
+                        if dt:
+                            active_days.add(dt.date().isoformat())
+                    except (ValueError, TypeError, AttributeError):
+                        continue
 
         activity = {
             "commits_30d": commits_30d,
             "prs_30d": prs,
             "issues_30d": issues,
-            "active_days_30d": 0,
+            "active_days_30d": len(active_days),
         }
 
         evidence = {

@@ -79,6 +79,7 @@ alter table public.leads enable row level security;
 alter table public.lead_drafts enable row level security;
 alter table public.lead_generation_receipts enable row level security;
 
+drop policy if exists "leads_owner_select" on public.leads;
 create policy "leads_owner_select"
   on public.leads for select
   to authenticated
@@ -91,6 +92,7 @@ create policy "leads_owner_select"
     )
   );
 
+drop policy if exists "lead_drafts_owner_select" on public.lead_drafts;
 create policy "lead_drafts_owner_select"
   on public.lead_drafts for select
   to authenticated
@@ -104,6 +106,7 @@ create policy "lead_drafts_owner_select"
     )
   );
 
+drop policy if exists "lead_generation_receipts_owner_select" on public.lead_generation_receipts;
 create policy "lead_generation_receipts_owner_select"
   on public.lead_generation_receipts for select
   to authenticated

@@ -1,6 +1,5 @@
 "use client";
 
-;
 import { supabase } from "@/lib/supabase";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -461,10 +460,102 @@ export default function AssessmentPage() {
   >(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-  
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [savedResumeName, setSavedResumeName] = useState<string | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const customSkillInputRef = useRef<HTMLInputElement | null>(null);
   const router = useRouter();
+
+  const DRAFT_KEY = "litmus-assessment-draft-v1";
+
+  // Restore wizard draft (memory-only previously — refresh lost everything).
+  // File objects cannot persist; store name hint and require re-select.
+  // Runs once on mount (client-only, hydration-safe): intentional setState
+  // in effect to hydrate from localStorage after server prerender.
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional draft restore on mount */
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as {
+        step?: number;
+        careerGoal?: string | null;
+        targetRole?: string | null;
+        selectedInterests?: string[];
+        resumeChoice?: ResumeChoice;
+        resumeFileName?: string | null;
+        selectedSkills?: SelectedSkill[];
+        skillConfidence?: Partial<Record<string, ConfidenceLevel>>;
+        assessmentAnswers?: Record<string, number>;
+        assessmentQuestionIndex?: number;
+      };
+      if (typeof draft.step === "number" && draft.step >= 1 && draft.step <= 8) {
+        setStep(draft.step as AssessmentStep);
+      }
+      if (draft.careerGoal) setCareerGoal(draft.careerGoal as CareerGoal);
+      if (draft.targetRole) setTargetRole(draft.targetRole as TargetRole);
+      if (Array.isArray(draft.selectedInterests)) {
+        setSelectedInterests(draft.selectedInterests as InterestId[]);
+      }
+      if (draft.resumeChoice) setResumeChoice(draft.resumeChoice);
+      if (draft.resumeFileName) setSavedResumeName(draft.resumeFileName);
+      if (Array.isArray(draft.selectedSkills)) {
+        setSelectedSkills(draft.selectedSkills);
+      }
+      if (draft.skillConfidence && typeof draft.skillConfidence === "object") {
+        setSkillConfidence(draft.skillConfidence);
+      }
+      if (draft.assessmentAnswers && typeof draft.assessmentAnswers === "object") {
+        setAssessmentAnswers(draft.assessmentAnswers);
+      }
+      if (typeof draft.assessmentQuestionIndex === "number") {
+        setAssessmentQuestionIndex(Math.max(0, draft.assessmentQuestionIndex));
+      }
+    } catch {
+      // Corrupt draft — start fresh.
+    } finally {
+      setDraftLoaded(true);
+    }
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Autosave draft on every meaningful change (after initial load).
+  useEffect(() => {
+    if (!draftLoaded) return;
+    try {
+      window.localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({
+          step,
+          careerGoal,
+          targetRole,
+          selectedInterests,
+          resumeChoice,
+          resumeFileName: resumeFile?.name ?? savedResumeName,
+          selectedSkills,
+          skillConfidence,
+          assessmentAnswers,
+          assessmentQuestionIndex,
+        }),
+      );
+    } catch {
+      // Quota/private mode — wizard still works memory-only.
+    }
+  }, [
+    draftLoaded,
+    step,
+    careerGoal,
+    targetRole,
+    selectedInterests,
+    resumeChoice,
+    resumeFile,
+    savedResumeName,
+    selectedSkills,
+    skillConfidence,
+    assessmentAnswers,
+    assessmentQuestionIndex,
+  ]);
 
   const selectedGoal = careerGoals.find((goal) => goal.id === careerGoal);
   const selectedRole =
@@ -545,9 +636,13 @@ export default function AssessmentPage() {
         );
         if (valid.length === 0) return;
 
+        // Don't wipe in-progress answers when AI set arrives mid-quiz.
+        // Old answers use different IDs so they won't inflate the new count
+        // (answeredAssessmentCount filters by current question IDs).
         setAiQuestions(valid);
-        setAssessmentQuestionIndex(0);
-        setAssessmentAnswers({});
+        setAssessmentQuestionIndex((prev) =>
+          Math.min(prev, Math.max(0, valid.length - 1)),
+        );
       } catch {
         // AI set is best-effort; the static bank below stays as fallback.
       } finally {
@@ -582,7 +677,8 @@ export default function AssessmentPage() {
 
   const refreshAiQuestions = () => {
     if (!targetRole || !selectedRole || aiQuestionsLoading) return;
-    setAiQuestions(null);
+    // Keep current set visible until replacement arrives (avoids index jump
+    // from falling back to static bank mid-quiz).
     void fetchAiQuestions(
       targetRole,
       selectedRole.title,
@@ -619,6 +715,7 @@ export default function AssessmentPage() {
   );
 
   async function submitAssessment() {
+    if (loading) return;
     setLoading(true);
 
     try {
@@ -718,6 +815,11 @@ export default function AssessmentPage() {
 
       // 4. Show the final reveal first
       setMessage("Your LITMUS profile is ready.");
+      try {
+        window.localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // Ignore storage errors on clear.
+      }
       setStep(8);
     } catch {
       setMessage("Could not reach the backend.");
@@ -784,6 +886,7 @@ export default function AssessmentPage() {
 
     setResumeError(null);
     setResumeFile(file);
+    setSavedResumeName(file.name);
     setResumeChoice("upload");
   };
 
@@ -1353,6 +1456,12 @@ export default function AssessmentPage() {
                       <p className="font-ui mt-2 text-sm leading-6 text-[var(--muted)]">
                         Or click to browse your files.
                       </p>
+                      {savedResumeName ? (
+                        <p className="font-ui mt-2 text-xs leading-5 text-[var(--muted)]">
+                          Previously selected: {savedResumeName} — please
+                          re-select the file to continue.
+                        </p>
+                      ) : null}
                       <p className="font-ui mt-4 text-xs uppercase tracking-[0.24em] text-[var(--muted)]">
                         PDF or DOCX
                       </p>
@@ -1374,6 +1483,7 @@ export default function AssessmentPage() {
                           type="button"
                           onClick={() => {
                             setResumeFile(null);
+                            setSavedResumeName(null);
                             setResumeChoice(null);
                             setResumeError(null);
                           }}
@@ -1963,6 +2073,7 @@ export default function AssessmentPage() {
               <button
                 type="button"
                 onClick={() => {
+                  if (loading) return;
                   if (assessmentQuestionIndex === 0) {
                     setStep(6);
                     return;
@@ -1970,7 +2081,8 @@ export default function AssessmentPage() {
 
                   setAssessmentQuestionIndex((current) => current - 1);
                 }}
-                className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-6 py-3.5 text-sm font-semibold text-[var(--foreground)] shadow-[0_10px_24px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[0_14px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+                disabled={loading}
+                className="inline-flex items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] px-6 py-3.5 text-sm font-semibold text-[var(--foreground)] shadow-[0_10px_24px_rgba(17,17,17,0.05)] transition duration-200 ease-out hover:-translate-y-0.5 hover:border-[var(--border-strong)] hover:shadow-[0_14px_28px_rgba(17,17,17,0.08)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Back
               </button>
@@ -1978,7 +2090,7 @@ export default function AssessmentPage() {
               <button
                 type="button"
                 onClick={() => {
-                  if (!canContinueFromStepSeven) {
+                  if (!canContinueFromStepSeven || loading) {
                     return;
                   }
 
@@ -1989,10 +2101,14 @@ export default function AssessmentPage() {
 
                   setAssessmentQuestionIndex((current) => current + 1);
                 }}
-                disabled={!canContinueFromStepSeven}
+                disabled={!canContinueFromStepSeven || loading}
                 className="inline-flex items-center justify-center rounded-full bg-[var(--accent)] px-6 py-3.5 text-sm font-semibold text-white shadow-[0_14px_32px_rgba(141,220,16,0.18)] transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-[var(--accent-strong)] active:translate-y-0 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)] disabled:cursor-not-allowed disabled:bg-[var(--border-strong)] disabled:text-white/70 disabled:shadow-none disabled:hover:translate-y-0 disabled:hover:bg-[var(--border-strong)]"
               >
-                {isFinalAssessmentQuestion ? "Finish assessment" : "Continue"}
+                {loading
+                  ? "Saving..."
+                  : isFinalAssessmentQuestion
+                    ? "Finish assessment"
+                    : "Continue"}
               </button>
             </div>
           </section>

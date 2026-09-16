@@ -15,6 +15,11 @@ alter table public.leads
 alter table public.leads
   add column if not exists source text not null default 'github';
 
+-- Constrain source to known origins (rerunnable via DROP + ADD).
+alter table public.leads drop constraint if exists leads_source_check;
+alter table public.leads
+  add constraint leads_source_check check (source in ('github', 'resume', 'milestone', 'manual'));
+
 create index if not exists leads_source_idx
   on public.leads (profile_id, source);
 

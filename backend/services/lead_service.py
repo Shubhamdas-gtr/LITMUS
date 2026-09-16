@@ -235,7 +235,7 @@ Rules:
 
     title = str(parsed.get("title") or "").strip()
     angle = str(parsed.get("angle") or "").strip()
-    relevant_skills = _string_list(parsed.get("relevant_skills"))
+    relevant_skills = _ground_skills(parsed.get("relevant_skills"), allowed_skill_set)
 
     try:
         confidence = float(parsed.get("confidence") or 0.0)
